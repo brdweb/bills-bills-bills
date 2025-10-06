@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   bills-app:
     image: bills-bills-bills:v0.1
@@ -8,6 +6,6 @@ services:
     environment:
       - FLASK_DEBUG=false
     restart: unless-stopped
-    volumes:
+    # volumes:
       # Mount a persistent volume for database (optional)
       # - ./data:/app/data
