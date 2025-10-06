@@ -1,0 +1,13 @@
+version: '3.8'
+
+services:
+  bills-app:
+    image: bills-bills-bills:v0.1
+    ports:
+      - "5000:5000"
+    environment:
+      - FLASK_DEBUG=false
+    restart: unless-stopped
+    volumes:
+      # Mount a persistent volume for database (optional)
+      # - ./data:/app/data

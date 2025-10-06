@@ -1,109 +1,203 @@
-# Bills, Bills, Bills! Expense Tracker v0.1
+# 📊 Bills, Bills, Bills! Expense Tracker v0.1
 
-A web-based application for tracking recurring monthly expenses, inspired by Chronicle on MacOS.
+A user-friendly web application for tracking recurring monthly expenses and payments. Inspired by Chronicle on MacOS.
 
-## Features
+## 🎯 What You Can Do
 
-- **Bill Management**: Create, edit, and archive recurring bills with custom Material Design icons
-- **Icon Selection**: Searchable dropdown with live preview for 44+ common Material Design icons
-- **Payment Tracking**: Record payments with optional recurring bill creation
-- **Payment History**: Click any bill to view historical payments
-- **User Authentication**: Session-based login with admin user management
-- **Responsive UI**: Clean three-column layout built with Bulma CSS
-- **Database**: SQLite with automatic schema migrations
-- **Docker Ready**: Containerized for easy production deployment
+- **Track Bills**: Add monthly, quarterly, or yearly recurring expenses
+- **Record Payments**: Log payments with automatic bill creation
+- **View History**: See payment history for any bill
+- **Customize Icons**: Choose from 44+ Material Design icons
+- **User Accounts**: Admin login with user management
+- **Responsive Design**: Works on desktop, tablet, and mobile
 
-## Quick Start
+## 🚀 Quick Start
 
-### Using Docker (Recommended)
+### Method 1: Docker Compose (Easiest)
 
-1. Build the Docker image:
+1. **Install Docker** (if you haven't already)
+2. **Clone or download** this repository
+3. **Run the application:**
+   ```bash
+   docker-compose up -d
+   ```
+
+4. **Open your browser** to: http://localhost:5000
+
+5. **Login with:**
+   - Username: `admin`
+   - Password: `password`
+
+### Method 2: Docker Run
+
+1. **Build the application:**
+   ```bash
+   docker build -t bills-app:v0.1 .
+   ```
+
+2. **Run the container:**
+   ```bash
+   docker run -d -p 5000:5000 bills-app:v0.1
+   ```
+
+3. **Open your browser** to: http://localhost:5000
+
+### Method 3: Development Mode
+
+For developers who want to modify the code:
+
+1. **Install Python** (3.10 or higher)
+2. **Install dependencies:**
+   ```bash
+   cd server
+   pip install -r requirements.txt
+   ```
+
+3. **Run locally:**
+   ```bash
+   python app.py
+   ```
+
+4. **Open your browser** to: http://localhost:5000
+
+## 💡 How to Use
+
+After logging in with admin/password:
+
+### 📝 Adding a Bill
+1. Click the **📝 Add Bill** button
+2. Fill in bill details:
+   - Name (e.g., "Electricity", "Internet")
+   - Amount (or check "Varies" for variable amounts)
+   - Frequency (Monthly, Quarterly, Yearly)
+   - Next due date
+   - Icons (search from dropdown)
+   - Auto-payment checkbox
+
+### 💰 Recording Payments
+1. Click the **💸 Pay** button on any bill
+2. Enter payment amount
+3. Set next due date (optional)
+4. Click "Record Payment"
+
+### 📚 Viewing History
+1. Click on any payment amount
+2. See full payment history for that bill
+3. Edit or delete payments if needed
+
+### 👥 User Management (Admin Only)
+1. Go to admin panel
+2. Add/remove user accounts
+3. Set admin privileges
+
+## 🛠️ Application Management
+
+### Docker Compose (Recommended)
+
 ```bash
-docker build -t bills-app:v0.1 .
+# Start application
+docker-compose up -d
+
+# View logs
+docker-compose logs -f
+
+# Stop application
+docker-compose down
+
+# Update to new version
+docker-compose pull && docker-compose up -d
 ```
 
-2. Run the container:
-```bash
-docker run -p 5000:5000 bills-app:v0.1
-```
-
-3. Open http://localhost:5000 in your browser
-
-### Development Setup
-
-1. Install Python dependencies:
-```bash
-cd server
-pip install -r requirements.txt
-```
-
-2. Run the application:
-```bash
-python app.py
-```
-
-3. Open http://localhost:5000 in your browser
-
-## Default Credentials
-
-- **Username:** admin
-- **Password:** password
-
-## Production Deployment
-
-Set the `FLASK_DEBUG=false` environment variable to disable debug mode. The app is served on port 5000 and listens on all interfaces (0.0.0.0).
+### Docker Run
 
 ```bash
-docker run -e FLASK_DEBUG=false -p 5000:5000 bills-app:v0.1
+# Start application
+docker run -d -p 5000:5000 --name bills-app bills-app:v0.1
+
+# View logs
+docker logs bills-app
+
+# Stop and remove
+docker stop bills-app
+docker rm bills-app
 ```
 
-## Data Persistence
+### Data Persistence
 
-SQLite database is created automatically in the app directory. For production, consider mounting a volume:
+Your data is stored in an SQLite database inside the container. To persist data between container restarts:
 
+1. Create a data directory
+2. Modify docker-compose.yml to uncomment the volume mount
+3. Or run with: `docker run -v /host/path:/app bills-app:v0.1`
+
+## 🔧 Advanced Configuration
+
+### Environment Variables
+
+- `FLASK_DEBUG=false`: Disable debug mode (production)
+- `FLASK_DEBUG=true`: Enable debug mode (development only)
+
+### Custom Port
+
+Change the port in docker-compose.yml or use:
 ```bash
-docker run -v /host/path/to/data:/app -p 5000:5000 bills-app:v0.1
+docker run -p 8080:5000 bills-app:v0.1
 ```
 
-## Architecture
+## ❓ Troubleshooting
 
-- **Frontend:** Vanilla JavaScript + Bulma CSS + Axios HTTP client
-- **Backend:** Flask Python web framework with session management
-- **Database:** SQLite with automatic migrations
-- **Icons:** Material Design Icons loaded from Google Fonts
-- **Styling:** Mobile-first responsive design
+### Can't access the app?
+- Make sure Docker is running
+- Check port 5000 isn't used by another application
+- Try http://127.0.0.1:5000 instead of localhost
 
-## Database Schema
+### Forgot admin password?
+- Reset by rebuilding: `docker-compose down && docker-compose up --build`
 
-- `bills`: Active bills with recurring payment logic
-- `payments`: Historical payment records
-- `users`: User accounts with role-based access control
+### Need to restart?
+```bash
+docker-compose restart
+```
 
-## API Endpoints
+## 🛡️ Security Notes
 
-- `GET /`: Serve client application
-- `POST /login`: User authentication
-- `GET/POST/PUT/DELETE /bills`: Bill management
-- `POST /bills/<id>/pay`: Record payments
-- `GET /bills/<name>/payments`: Payment history
-- `GET/POST/DELETE /users`: Admin user management
+- Default admin credentials: admin/password (change in production!)
+- Runs in production mode by default (debug disabled)
+- All data stored locally (no cloud dependency)
 
-## Icons
+## 📱 Features Overview
 
-Common Material Design icons are available, including:
-- payment, credit_card, account_balance
-- home, car, phone, wifi
-- shopping_cart, restaurant, business
-- And 35+ more...
+- ✅ Three-column responsive layout
+- ✅ Material Design icons with search
+- ✅ Recurring bill automation
+- ✅ Payment history tracking
+- ✅ User authentication system
+- ✅ Admin panel for user management
+- ✅ Mobile-friendly interface
+- ✅ SQLite database (no setup required)
+- ✅ Docker containerization
+- ✅ Data persistence and backup
 
-## License
+## 🏗️ Technical Details
 
-Open source - no external dependencies required.
+**Frontend:** Vanilla JavaScript, Bulma CSS, Material Icons, HTML5  
+**Backend:** Flask Python web framework with session management  
+**Database:** SQLite with automatic schema migrations  
+**Deployment:** Docker container ready for any environment  
 
-## Version History
+**Database Tables:**
+- `bills`: Active expenses with recurring logic
+- `payments`: Payment transaction history
+- `users`: User accounts and permissions
 
-**v0.1** - Initial production release
-- Complete bill and payment management
-- User authentication system
-- Icon customization
-- Docker deployment ready
+**API Endpoints:**
+- `/` - Main application
+- `/login` - User authentication
+- `/bills` - Bill management (CRUD)
+- `/bills/<id>/pay` - Record payments
+- `/payments` - Payment history
+- `/users` - Admin user management
+
+---
+
+**Ready to take control of your expenses? Get started with Bills Bills Bills today! 🎉**
