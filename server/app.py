@@ -336,4 +336,7 @@ if __name__ == '__main__':
         db.execute("UPDATE users SET role = 'admin' WHERE username = 'admin'")
     db.commit()
     db.close()
-    app.run(debug=True)
+
+    # Production settings
+    debug_mode = os.environ.get('FLASK_DEBUG', 'False').lower() == 'true'
+    app.run(host='0.0.0.0', port=5000, debug=debug_mode)

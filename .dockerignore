@@ -1,0 +1,9 @@
+server/venv/
+.git/
+.vscode/
+*.db
+node_installer.msi
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
