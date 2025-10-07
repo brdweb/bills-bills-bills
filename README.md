@@ -131,6 +131,18 @@ docker-compose down
 docker-compose up -d
 ```
 
+### Testing Fresh Installation
+To test a completely fresh installation (deletes all existing data and reinitializes):
+1. Add to your docker-compose.yml under the service:
+   ```yaml
+   environment:
+     - FORCE_FRESH_INIT=true
+   ```
+2. Run `docker-compose up -d`
+3. Remove the environment variable after testing to prevent accidental data loss.
+
+**Warning:** This will delete all existing databases and data! Use only for testing.
+
 ### Data Persistence
 Docker Compose automatically creates persistent data directories:
 - **`data/`** - User accounts, permissions, and system settings (auto-created)
