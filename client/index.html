@@ -65,7 +65,7 @@
 
 <!-- Footer -->
 <footer style="position: fixed; bottom: 0; left: 0; right: 0; background: #f8f9fa; padding: 5px 10px; border-top: 1px solid #dee2e6; text-align: center; font-size: 12px; color: #6c757d;">
-        Bills Bills Bills v1.3.8 - Licensed under MIT
+        Bills Bills Bills v1.3.9 - Licensed under MIT
     </footer>
 
     <!-- Modal for editing/adding bill -->
@@ -235,11 +235,10 @@
                     </div>
 
                     <div class="field" style="margin-bottom: 20px;">
-                        <button class="button is-primary" id="show-add-user-form" onclick="window.showAddUserForm()" style="min-width: 150px;">
+                        <button class="button is-primary is-small" id="show-add-user-form" onclick="window.showAddUserForm()" title="Add User">
                             <span class="icon">
                                 <i class="material-icons">person_add</i>
                             </span>
-                            Add User
                         </button>
                     </div>
 
@@ -913,14 +912,14 @@ window.login = function() {
                     const list = document.getElementById('users-list');
                     list.innerHTML = '';
                     response.data.forEach(user => {
-                        list.innerHTML += `<p>${user.username} (${user.role})
+                        list.innerHTML += `<p style="margin-bottom: 15px; line-height: 1.8;">${user.username} (${user.role})
                             <button onclick="window.manageUserAccess(${user.id}, '${user.username}')" class="button is-small" title="Manage Access">
-                                <span class="icon" style="font-size: 16px;">
+                                <span class="icon" style="font-size: 13px;">
                                     <i class="material-icons">edit</i>
                                 </span>
                             </button>
                             <button onclick="window.deleteUser(${user.id})" class="button is-small is-danger" title="Delete User">
-                                <span class="icon" style="font-size: 16px;">
+                                <span class="icon" style="font-size: 13px;">
                                     <i class="material-icons">remove</i>
                                 </span>
                             </button>

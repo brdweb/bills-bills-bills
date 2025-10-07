@@ -809,7 +809,7 @@ def delete_user(id):
 
 @app.route('/api/version', methods=['GET'])
 def get_version():
-    return jsonify({'version': '1.3.8'})
+    return jsonify({'version': '1.3.9'})
 
 @app.route('/change-password', methods=['POST'])
 def change_password():
@@ -831,7 +831,7 @@ def change_password():
     master_db = get_master_db()
     user = master_db.execute('SELECT * FROM users WHERE id = ?', (user_id,)).fetchone()
 
-    print(f"User found: {user is not None}, change_token in user: {user['change_token'][:10] if user and user.get('change_token') else 'None'}")  # Debug log
+    print(f"User found: {user is not None}, change_token in user: {user['change_token'][:10] if user and 'change_token' in user.keys() and user['change_token'] else 'None'}")  # Debug log
 
     if not user:
         return jsonify({'error': 'User not found'}), 404
