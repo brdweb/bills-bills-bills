@@ -81,99 +81,128 @@ except Exception as e:
 import time
 time.sleep(1)  # Give mounts time to settle
 
-master_db_exists = os.path.exists(MASTER_DB)
-personal_db_exists = os.path.exists(os.path.join(DATABASE_DIR, "personal.db"))
+# Check if databases need initialization (check for tables instead of file existence)
+print("Checking if databases need initialization...")
 
-print(f"Database check - Master DB: {MASTER_DB} exists: {master_db_exists}")
-print(f"Database check - Personal DB: {os.path.join(DATABASE_DIR, 'personal.db')} exists: {personal_db_exists}")
-
-if not master_db_exists or not personal_db_exists:
-    print("Fresh deployment detected! Auto-initializing databases...")
-
-    # Populate the databases exactly as in init-db endpoint
+def needs_init(db_path, table_name):
+    if not os.path.exists(db_path):
+        return True
     try:
-        # Connect to master DB (this will create the file if missing)
+        conn = sqlite3.connect(db_path)
+        cursor = conn.cursor()
+        cursor.execute(f"SELECT name FROM sqlite_master WHERE type='table' AND name='{table_name}'")
+        result = cursor.fetchone()
+        conn.close()
+        return result is None
+    except Exception as e:
+        print(f"Error checking database {db_path}: {str(e)}")
+        return True
+
+master_needs_init = needs_init(MASTER_DB, 'users')
+personal_needs_init = needs_init(os.path.join(DATABASE_DIR, "personal.db"), 'bills')
+
+if master_needs_init or personal_needs_init:
+    print("Initialization needed! Auto-initializing databases...")
+
+    # Populate the databases
+    try:
+        # Initialize master DB
         master_db = sqlite3.connect(MASTER_DB)
         print(f"✅ Connected to master DB at {MASTER_DB}")
         master_db.row_factory = sqlite3.Row
 
-        master_db.execute('''CREATE TABLE users (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            username TEXT UNIQUE NOT NULL,
-            password_hash TEXT NOT NULL,
-            role TEXT DEFAULT 'user',
-            password_change_required BOOLEAN DEFAULT FALSE
-        )''')
-        print("✅ Created users table in master DB")
+        if master_needs_init:
+            master_db.execute('''CREATE TABLE users (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                username TEXT UNIQUE NOT NULL,
+                password_hash TEXT NOT NULL,
+                role TEXT DEFAULT 'user',
+                password_change_required BOOLEAN DEFAULT FALSE
+            )''')
+            print("✅ Created users table in master DB")
 
-        master_db.execute('''CREATE TABLE databases (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT UNIQUE NOT NULL,
-            display_name TEXT NOT NULL,
-            description TEXT DEFAULT '',
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )''')
-        print("✅ Created databases table in master DB")
+            master_db.execute('''CREATE TABLE databases (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT UNIQUE NOT NULL,
+                display_name TEXT NOT NULL,
+                description TEXT DEFAULT '',
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )''')
+            print("✅ Created databases table in master DB")
 
-        master_db.execute('''CREATE TABLE user_database_access (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id INTEGER REFERENCES users(id),
-            database_id INTEGER REFERENCES databases(id),
-            UNIQUE(user_id, database_id)
-        )''')
-        print("✅ Created user_database_access table in master DB")
+            master_db.execute('''CREATE TABLE user_database_access (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER REFERENCES users(id),
+                database_id INTEGER REFERENCES databases(id),
+                UNIQUE(user_id, database_id)
+            )''')
+            print("✅ Created user_database_access table in master DB")
 
-        # Create default admin user
-        admin_hash = hashlib.sha256("password".encode()).hexdigest()
-        master_db.execute("INSERT INTO users (username, password_hash, role, password_change_required) VALUES (?, ?, ?, ?)",
-                         ("admin", admin_hash, "admin", True))
-        print("✅ Created default admin user")
+            # Create default admin user
+            admin_hash = hashlib.sha256("password".encode()).hexdigest()
+            master_db.execute("INSERT INTO users (username, password_hash, role, password_change_required) VALUES (?, ?, ?, ?)",
+                             ("admin", admin_hash, "admin", True))
+            print("✅ Created default admin user")
 
-        # Create single empty 'personal' database entry
-        master_db.execute("INSERT INTO databases (name, display_name, description) VALUES (?, ?, ?)",
-                         ("personal", "Personal Finances", "Personal bills and expenses"))
+            # Create single empty 'personal' database entry
+            master_db.execute("INSERT INTO databases (name, display_name, description) VALUES (?, ?, ?)",
+                             ("personal", "Personal Finances", "Personal bills and expenses"))
+            print("✅ Created personal database entry in master DB")
 
-        # Initialize empty personal database
+        # Initialize personal database if needed
         personal_db_path = os.path.join(DATABASE_DIR, "personal.db")
         personal_db = sqlite3.connect(personal_db_path)
-        personal_db.execute('''CREATE TABLE bills (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT NOT NULL,
-            amount DECIMAL(10,2),
-            varies BOOLEAN DEFAULT FALSE,
-            frequency TEXT CHECK(frequency IN ('monthly', 'quarterly', 'yearly')) DEFAULT 'monthly',
-            next_due DATE NOT NULL,
-            auto_payment BOOLEAN DEFAULT FALSE,
-            paid BOOLEAN DEFAULT FALSE,
-            archived BOOLEAN DEFAULT FALSE,
-            icon TEXT DEFAULT 'payment',
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )''')
-        personal_db.execute('''CREATE TABLE payments (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            bill_id INTEGER REFERENCES bills(id),
-            amount DECIMAL(10,2),
-            payment_date DATE DEFAULT CURRENT_TIMESTAMP
-        )''')
+
+        if personal_needs_init:
+            personal_db.execute('''CREATE TABLE bills (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL,
+                amount DECIMAL(10,2),
+                varies BOOLEAN DEFAULT FALSE,
+                frequency TEXT CHECK(frequency IN ('monthly', 'quarterly', 'yearly')) DEFAULT 'monthly',
+                next_due DATE NOT NULL,
+                auto_payment BOOLEAN DEFAULT FALSE,
+                paid BOOLEAN DEFAULT FALSE,
+                archived BOOLEAN DEFAULT FALSE,
+                icon TEXT DEFAULT 'payment',
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )''')
+            print("✅ Created bills table in personal DB")
+
+            personal_db.execute('''CREATE TABLE payments (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                bill_id INTEGER REFERENCES bills(id),
+                amount DECIMAL(10,2),
+                payment_date DATE DEFAULT CURRENT_TIMESTAMP
+            )''')
+            print("✅ Created payments table in personal DB")
+
         personal_db.commit()
         personal_db.close()
 
-        # Grant admin access to personal database
+        # Grant admin access to personal database (always ensure this)
         admin_id = master_db.execute('SELECT id FROM users WHERE username = ?', ('admin',)).fetchone()[0]
-        master_db.execute('INSERT INTO user_database_access (user_id, database_id) VALUES (?, (SELECT id FROM databases WHERE name = ?))',
-                         (admin_id, "personal"))
+        try:
+            master_db.execute('INSERT INTO user_database_access (user_id, database_id) VALUES (?, (SELECT id FROM databases WHERE name = ?))',
+                             (admin_id, "personal"))
+            print("✅ Granted admin access to personal database")
+        except sqlite3.IntegrityError:
+            print("Admin already has access to personal database")
+
         master_db.commit()
         master_db.close()
 
-        print("✅ Fresh deployment initialization complete!")
+        print("✅ Database initialization complete!")
         print("📝 Admin login: admin/password")
         print("🔒 Password change required on first login")
 
     except Exception as e:
-        print(f"❌ Fresh deployment initialization failed: {str(e)}")
+        print(f"❌ Database initialization failed: {str(e)}")
         import traceback
         traceback.print_exc()
         raise
+else:
+    print("Databases already initialized, skipping auto-init")
 
 def login_required(f):
     @wraps(f)
@@ -241,9 +270,9 @@ def get_db(db_name=None):
 def apply_database_migrations(db):
     """Apply database schema migrations"""
     try:
-        # Add password_change_required column if it doesn't exist
         db.execute("ALTER TABLE bills ADD COLUMN icon TEXT DEFAULT 'payment'")
         print("Added icon column to bills table")
+        db.commit()
     except sqlite3.OperationalError:
         # Column likely already exists, ignore
         pass
@@ -790,125 +819,6 @@ def change_password():
         master_db.rollback()
         return jsonify({'error': 'Failed to change password'}), 500
 
-@app.route('/init-db', methods=['POST'])
-def init_database():
-    """Initialize database if needed - ensures clean first-run setup"""
-    print("Running database initialization check...")
-
-    # Create directories if they don't exist (for fresh deployments)
-    print(f"Ensuring database directories exist...")
-    os.makedirs(DATABASE_DIR, exist_ok=True)
-    os.makedirs(os.path.dirname(MASTER_DB), exist_ok=True)
-
-    # Check write permissions
-    print(f"Checking write permissions for master DB dir: {os.path.dirname(MASTER_DB)}")
-    if os.access(os.path.dirname(MASTER_DB), os.W_OK):
-        print("✅ Master DB directory is writable")
-    else:
-        print("❌ Master DB directory is NOT writable")
-
-    print(f"Checking write permissions for DBS dir: {DATABASE_DIR}")
-    if os.access(DATABASE_DIR, os.W_OK):
-        print("✅ DBS directory is writable")
-    else:
-        print("❌ DBS directory is NOT writable")
-
-    # Test file creation
-    master_test_file = os.path.join(os.path.dirname(MASTER_DB), 'test.txt')
-    try:
-        with open(master_test_file, 'w') as f:
-            f.write('test')
-        print("✅ Successfully wrote test file to master DB dir")
-        os.remove(master_test_file)
-    except Exception as e:
-        print(f"❌ Failed to write test file to master DB dir: {str(e)}")
-
-    dbs_test_file = os.path.join(DATABASE_DIR, 'test.txt')
-    try:
-        with open(dbs_test_file, 'w') as f:
-            f.write('test')
-        print("✅ Successfully wrote test file to DBS dir")
-        os.remove(dbs_test_file)
-    except Exception as e:
-        print(f"❌ Failed to write test file to DBS dir: {str(e)}")
-
-    # Initialize master database
-    master_db = get_master_db()
-    master_db.execute('''CREATE TABLE IF NOT EXISTS users (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        username TEXT UNIQUE NOT NULL,
-        password_hash TEXT NOT NULL,
-        role TEXT DEFAULT 'user',
-        password_change_required BOOLEAN DEFAULT FALSE
-    )''')
-    master_db.execute('''CREATE TABLE IF NOT EXISTS databases (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        name TEXT UNIQUE NOT NULL,
-        display_name TEXT NOT NULL,
-        description TEXT DEFAULT '',
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-    )''')
-    master_db.execute('''CREATE TABLE IF NOT EXISTS user_database_access (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        user_id INTEGER REFERENCES users(id),
-        database_id INTEGER REFERENCES databases(id),
-        UNIQUE(user_id, database_id)
-    )''')
-
-    # Create default admin user if not exists
-    admin_hash = hashlib.sha256("password".encode()).hexdigest()
-    try:
-        master_db.execute("INSERT INTO users (username, password_hash, role) VALUES (?, ?, ?)",
-                         ("admin", admin_hash, "admin"))
-        print("Default admin user created")
-    except sqlite3.IntegrityError:
-        print("Admin user already exists")
-        pass
-
-    # Create single empty 'personal' database if not exists (admin access only)
-    try:
-        master_db.execute("INSERT INTO databases (name, display_name, description) VALUES (?, ?, ?)",
-                         ("personal", "Personal Finances", "Personal bills and expenses"))
-
-        # Initialize empty personal database
-        personal_db_path = os.path.join(DATABASE_DIR, "personal.db")
-        personal_db = sqlite3.connect(personal_db_path)
-        personal_db.execute('''CREATE TABLE bills (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT NOT NULL,
-            amount DECIMAL(10,2),
-            varies BOOLEAN DEFAULT FALSE,
-            frequency TEXT CHECK(frequency IN ('monthly', 'quarterly', 'yearly')) DEFAULT 'monthly',
-            next_due DATE NOT NULL,
-            auto_payment BOOLEAN DEFAULT FALSE,
-            paid BOOLEAN DEFAULT FALSE,
-            archived BOOLEAN DEFAULT FALSE,
-            icon TEXT DEFAULT 'payment',
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )''')
-        personal_db.execute('''CREATE TABLE payments (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            bill_id INTEGER REFERENCES bills(id),
-            amount DECIMAL(10,2),
-            payment_date DATE DEFAULT CURRENT_TIMESTAMP
-        )''')
-        personal_db.commit()
-        personal_db.close()
-
-        # Grant admin access to personal database ONLY
-        admin_id = master_db.execute('SELECT id FROM users WHERE username = ?', ('admin',)).fetchone()[0]
-        master_db.execute('INSERT INTO user_database_access (user_id, database_id) VALUES (?, (SELECT id FROM databases WHERE name = ?))',
-                         (admin_id, "personal"))
-        print("Single empty personal database created with admin access only")
-    except sqlite3.IntegrityError:
-        print("Personal database already exists")
-        pass
-
-    master_db.commit()
-    master_db.close()
-
-    print("Database initialization complete!")
-    return jsonify({'message': 'Database initialized'})
-
+# Remove the /init-db endpoint as auto-init handles everything
 if __name__ == '__main__':
     app.run(debug=os.environ.get('FLASK_DEBUG', 'false').lower() in ('true', '1', 'yes'))
