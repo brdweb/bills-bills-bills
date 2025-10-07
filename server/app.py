@@ -738,6 +738,86 @@ if __name__ == '__main__':
     os.makedirs(DATABASE_DIR, exist_ok=True)
     os.makedirs(os.path.dirname(MASTER_DB), exist_ok=True)
 
+    # AUTO-INITIALIZE IF FRESH DEPLOYMENT
+    master_db_exists = os.path.exists(MASTER_DB)
+    personal_db_exists = os.path.exists(os.path.join(DATABASE_DIR, "personal.db"))
+
+    if not master_db_exists or not personal_db_exists:
+        print("Fresh deployment detected! Auto-initializing databases...")
+        print(f"Master DB exists: {master_db_exists}")
+        print(f"Personal DB exists: {personal_db_exists}")
+
+        # Populate the databases exactly as in init-db endpoint
+        try:
+            master_db.execute('''CREATE TABLE IF NOT EXISTS users (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                username TEXT UNIQUE NOT NULL,
+                password_hash TEXT NOT NULL,
+                role TEXT DEFAULT 'user',
+                password_change_required BOOLEAN DEFAULT FALSE
+            )''')
+            master_db.execute('''CREATE TABLE IF NOT EXISTS databases (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT UNIQUE NOT NULL,
+                display_name TEXT NOT NULL,
+                description TEXT DEFAULT '',
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )''')
+            master_db.execute('''CREATE TABLE IF NOT EXISTS user_database_access (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER REFERENCES users(id),
+                database_id INTEGER REFERENCES databases(id),
+                UNIQUE(user_id, database_id)
+            )''')
+
+            # Create default admin user
+            admin_hash = hashlib.sha256("password".encode()).hexdigest()
+            master_db.execute("INSERT INTO users (username, password_hash, role) VALUES (?, ?, ?)",
+                             ("admin", admin_hash, "admin"))
+
+            # Create single empty 'personal' database
+            master_db.execute("INSERT INTO databases (name, display_name, description) VALUES (?, ?, ?)",
+                             ("personal", "Personal Finances", "Personal bills and expenses"))
+
+            # Initialize empty personal database
+            personal_db_path = os.path.join(DATABASE_DIR, "personal.db")
+            personal_db = sqlite3.connect(personal_db_path)
+            personal_db.execute('''CREATE TABLE bills (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL,
+                amount DECIMAL(10,2),
+                varies BOOLEAN DEFAULT FALSE,
+                frequency TEXT CHECK(frequency IN ('monthly', 'quarterly', 'yearly')) DEFAULT 'monthly',
+                next_due DATE NOT NULL,
+                auto_payment BOOLEAN DEFAULT FALSE,
+                paid BOOLEAN DEFAULT FALSE,
+                archived BOOLEAN DEFAULT FALSE,
+                icon TEXT DEFAULT 'payment',
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )''')
+            personal_db.execute('''CREATE TABLE payments (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                bill_id INTEGER REFERENCES bills(id),
+                amount DECIMAL(10,2),
+                payment_date DATE DEFAULT CURRENT_TIMESTAMP
+            )''')
+            personal_db.commit()
+            personal_db.close()
+
+            # Grant admin access to personal database
+            admin_id = master_db.execute('SELECT id FROM users WHERE username = ?', ('admin',)).fetchone()[0]
+            master_db.execute('INSERT INTO user_database_access (user_id, database_id) VALUES (?, (SELECT id FROM databases WHERE name = ?))',
+                             (admin_id, "personal"))
+            master_db.commit()
+
+            print("✅ Fresh deployment initialization complete!")
+            print("📝 Admin login: admin/password")
+            print("🔒 Password change required on first login")
+
+        except Exception as e:
+            print(f"❌ Fresh deployment initialization failed: {e}")
+            raise
+
     # Initialize master database
     print("Initializing master database connection...")
     master_db = get_master_db()
