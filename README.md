@@ -1,11 +1,6 @@
-# 💵 Bills, Bills, Bills! Expense Tracker v0.2
+# 💵 Bills, Bills, Bills! Expense Tracker
 
 A **secure multi-user** web application for tracking recurring monthly expenses and payments with **complete data separation**. Inspired by Chronicle on MacOS.
-
-## 🔥 What's New in v0.2
-- **Enhanced Security**: Default admin password must be changed on first login
-- **Improved Database Migrations**: Automatic handling of database schema updates
-- **Production-Ready**: Optimized for deployment with persistent data
 
 ## 🎯 Features
 
@@ -33,7 +28,8 @@ A **secure multi-user** web application for tracking recurring monthly expenses 
 
    services:
      bills-app:
-       image: ghcr.io/brdweb/bills-bills-bills:v0.2
+       image: ghcr.io/brdweb/bills-bills-bills:latest
+       container_name: bills-bills-bills
        ports:
          - "5000:5000"
        restart: unless-stopped
@@ -107,7 +103,7 @@ After login, select your database from the dropdown:
 docker-compose up -d
 
 # Or manually
-docker start bills-bills-bills_app_1
+docker start bills-bills-bills
 ```
 
 ### View Logs
@@ -116,7 +112,7 @@ docker start bills-bills-bills_app_1
 docker-compose logs -f
 
 # Or manually
-docker logs -f bills-bills-bills_app_1
+docker logs -f bills-bills-bills
 ```
 
 ### Stop Application
@@ -125,12 +121,12 @@ docker logs -f bills-bills-bills_app_1
 docker-compose down
 
 # Or manually
-docker stop bills-bills-bills_app_1
+docker stop bills-bills-bills
 ```
 
 ### Update to New Version
 ```bash
-docker pull ghcr.io/brdweb/bills-bills-bills:v0.2
+docker pull ghcr.io/brdweb/bills-bills-bills:latest
 docker-compose down
 docker-compose up -d
 ```
