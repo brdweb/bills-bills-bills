@@ -26,14 +26,14 @@ A **secure multi-user** web application for tracking recurring monthly expenses 
 
 ### Run the Application
 
-**Clone and run with Docker Compose:**
+1. **Download** `docker-compose.yml` from the [GitHub Releases](https://github.com/[your-username]/bills-bills-bills/releases/latest)
+
+2. **Run the application:**
 ```bash
-git clone https://github.com/[your-username]/bills-bills-bills.git
-cd bills-bills-bills
 docker-compose up -d
 ```
 
-**Open your browser** and visit: http://localhost:5000
+3. **Open your browser** and visit: http://localhost:5000
 
 ## 🔐 First Login
 
@@ -113,11 +113,12 @@ docker stop bills-bills-bills_app_1
 ```
 
 ### Update to New Version
+1. Download the latest `docker-compose.yml` from [GitHub Releases](https://github.com/[your-username]/bills-bills-bills/releases/latest)
+2. Replace your existing `docker-compose.yml` file
+3. Update your containers:
 ```bash
-git pull origin main
 docker-compose down
-docker-compose build --no-cache
-docker-compose up -d
+docker-compose up -d --build
 ```
 
 ### Data Persistence
