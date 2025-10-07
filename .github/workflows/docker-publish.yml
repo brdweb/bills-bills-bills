@@ -39,5 +39,7 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           labels: |
             org.opencontainers.image.title=Bills Bills Bills
-            org.opencontainers.image.description=Expense tracker with multi-database support
+            org.opencontainers.image.description=Secure expense tracker with multi-database support
             org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.licenses=MIT

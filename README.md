@@ -26,12 +26,28 @@ A **secure multi-user** web application for tracking recurring monthly expenses 
 
 ### Run the Application
 
-1. **Download** `docker-compose.yml` from the [GitHub Releases](https://github.com/[your-username]/bills-bills-bills/releases/latest)
+1. **Create a `docker-compose.yml` file** with the following content:
+
+   ```yaml
+   version: '3.8'
+
+   services:
+     bills-app:
+       image: ghcr.io/brdweb/bills-bills-bills:v0.2
+       ports:
+         - "5000:5000"
+       restart: unless-stopped
+       volumes:
+         # Persistent data storage for all databases
+         - ./data:/app/data
+         # Mount the shared database directory
+         - ./dbs:/app/dbs
+   ```
 
 2. **Run the application:**
-```bash
-docker-compose up -d
-```
+   ```bash
+   docker-compose up -d
+   ```
 
 3. **Open your browser** and visit: http://localhost:5000
 
@@ -113,12 +129,10 @@ docker stop bills-bills-bills_app_1
 ```
 
 ### Update to New Version
-1. Download the latest `docker-compose.yml` from [GitHub Releases](https://github.com/[your-username]/bills-bills-bills/releases/latest)
-2. Replace your existing `docker-compose.yml` file
-3. Update your containers:
 ```bash
+docker pull ghcr.io/brdweb/bills-bills-bills:v0.2
 docker-compose down
-docker-compose up -d --build
+docker-compose up -d
 ```
 
 ### Data Persistence
