@@ -809,7 +809,7 @@ def delete_user(id):
 
 @app.route('/api/version', methods=['GET'])
 def get_version():
-    return jsonify({'version': '1.3.2'})
+    return jsonify({'version': '1.3.3'})
 
 @app.route('/change-password', methods=['POST'])
 def change_password():
