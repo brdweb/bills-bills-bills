@@ -22,8 +22,13 @@
 <body class="has-background-light">
     <div class="columns is-mobile is-centered is-fullheight m-0" style="min-height: 100vh; height: 100vh;">
         <div class="column is-2 has-background-light py-4 px-4">
-            <div class="block">
+        <div class="block">
                 <button id="auth-button" class="button is-info" onclick="window.showLoginModal()">Login</button>
+                <div id="database-selector" style="display:none;" class="select is-fullwidth">
+                    <select id="database-select" onchange="window.selectDatabase(this.value)">
+                        <option value="">Select Database...</option>
+                    </select>
+                </div>
             </div>
             <h2 class="title is-5">Filters & Reports</h2>
             <div class="reports">
@@ -180,47 +185,98 @@
 
     <!-- Admin Modal -->
     <div id="admin-modal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); justify-content:center; align-items:center;">
-        <div class="modal-card" style="width: 600px;">
+        <div class="modal-card" style="width: 800px; max-height: 80vh; overflow-y: auto;">
             <header class="modal-card-head">
-                <p class="modal-card-title">Admin - Manage Users</p>
+                <p class="modal-card-title">Admin Panel</p>
                 <button class="delete" aria-label="close" onclick="window.closeAdminModal()"></button>
             </header>
             <section class="modal-card-body">
-                <div id="users-list"></div>
-                <div class="columns">
-                    <div class="column">
-                        <div class="field">
-                            <label class="label">Username</label>
-                            <div class="control">
-                                <input class="input" type="text" id="new-username" placeholder="Username">
+                <div class="tabs">
+                    <ul>
+                        <li class="is-active" id="users-tab"><a onclick="window.showUsersTab()">Users</a></li>
+                        <li id="db-tab"><a onclick="window.showDatabasesTab()">Databases</a></li>
+                    </ul>
+                </div>
+
+                <!-- Users Tab -->
+                <div id="users-section">
+                    <div id="users-list"></div>
+                    <div class="columns">
+                        <div class="column">
+                            <div class="field">
+                                <label class="label">Username</label>
+                                <div class="control">
+                                    <input class="input" type="text" id="new-username" placeholder="Username">
+                                </div>
                             </div>
                         </div>
-                    </div>
-                    <div class="column">
-                        <div class="field">
-                            <label class="label">Password</label>
-                            <div class="control">
-                                <input class="input" type="password" id="new-password" placeholder="Password">
+                        <div class="column">
+                            <div class="field">
+                                <label class="label">Password</label>
+                                <div class="control">
+                                    <input class="input" type="password" id="new-password" placeholder="Password">
+                                </div>
                             </div>
                         </div>
-                    </div>
-                    <div class="column">
-                        <div class="field">
-                            <label class="label">Role</label>
-                            <div class="control">
-                                <div class="select">
-                                    <select id="new-role">
-                                        <option value="user">User</option>
-                                        <option value="admin">Admin</option>
-                                    </select>
+                        <div class="column">
+                            <div class="field">
+                                <label class="label">Role</label>
+                                <div class="control">
+                                    <div class="select">
+                                        <select id="new-role">
+                                            <option value="user">User</option>
+                                            <option value="admin">Admin</option>
+                                        </select>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="field">
+                                <label class="label">Database Access</label>
+                                <div class="control">
+                                    <div class="select is-multiple">
+                                        <select id="user-databases" multiple size="3">
+                                        </select>
+                                    </div>
                                 </div>
                             </div>
                         </div>
                     </div>
+                    <button class="button is-success" onclick="window.addUser()">Add User</button>
+                </div>
+
+                <!-- Databases Tab -->
+                <div id="databases-section" style="display:none;">
+                    <div id="databases-list"></div>
+                    <div class="columns">
+                        <div class="column">
+                            <div class="field">
+                                <label class="label">Database Name</label>
+                                <div class="control">
+                                    <input class="input" type="text" id="new-db-name" placeholder="database_name">
+                                </div>
+                            </div>
+                        </div>
+                        <div class="column">
+                            <div class="field">
+                                <label class="label">Display Name</label>
+                                <div class="control">
+                                    <input class="input" type="text" id="new-db-display-name" placeholder="Display Name">
+                                </div>
+                            </div>
+                        </div>
+                        <div class="column">
+                            <div class="field">
+                                <label class="label">Description</label>
+                                <div class="control">
+                                    <input class="input" type="text" id="new-db-description" placeholder="Optional description">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <button class="button is-success" onclick="window.createDatabase()">Create Database</button>
                 </div>
             </section>
             <footer class="modal-card-foot">
-                <button class="button is-success" onclick="window.addUser()">Add User</button>
                 <button class="button" onclick="window.closeAdminModal()">Close</button>
             </footer>
         </div>
@@ -339,9 +395,13 @@
                     window.isLoggedIn = true;
                     window.role = response.data.role;
                     window.isAdmin = (window.role === 'admin');
+                    window.updateDatabaseList(response.data.databases);
                     window.updateAuthButton();
                     if (window.isAdmin && !document.getElementById('admin-button')) {
                         document.querySelector('.block').insertAdjacentHTML('beforeend', '<button id="admin-button" class="button is-warning" onclick="window.showAdminModal()">Admin</button>');
+                    }
+                    if (response.data.current_db) {
+                        document.getElementById('database-select').value = response.data.current_db;
                     }
                     window.fetchBills();
                 })
@@ -350,6 +410,7 @@
                     window.role = null;
                     window.isAdmin = false;
                     window.updateAuthButton();
+                    window.updateDatabaseList([]);
                     window.fetchBills(); // Will show empty if not logged in
                 });
         }
@@ -363,6 +424,36 @@
                 button.textContent = 'Login';
                 button.onclick = window.showLoginModal;
             }
+        }
+
+        window.updateDatabaseList = function(databases) {
+            const selector = document.getElementById('database-selector');
+            const select = document.getElementById('database-select');
+            select.innerHTML = '<option value="">Select Database...</option>';
+
+            if (databases && databases.length > 0) {
+                selector.style.display = 'block';
+                databases.forEach(db => {
+                    const option = document.createElement('option');
+                    option.value = db.name;
+                    option.textContent = db.display_name;
+                    select.appendChild(option);
+                });
+            } else {
+                selector.style.display = 'none';
+            }
+        }
+
+        window.selectDatabase = function(dbName) {
+            if (!dbName) return;
+            axios.post(`${window.API_URL}/select-db/${dbName}`)
+                .then(() => {
+                    window.fetchBills();
+                    alert(`Switched to database: ${dbName}`);
+                })
+                .catch(error => {
+                    alert('Error switching database: ' + (error.response ? error.response.data.error : error.message));
+                });
         }
 
         window.logout = function() {
@@ -612,6 +703,7 @@
                     window.role = response.data.role;
                     window.isAdmin = (window.role === 'admin');
                     window.updateAuthButton();
+                    window.updateDatabaseList(response.data.databases);
                     if (window.isAdmin && !document.getElementById('admin-button')) {
                         document.querySelector('.block').insertAdjacentHTML('beforeend', '<button id="admin-button" class="button is-warning" onclick="window.showAdminModal()">Admin</button>');
                     }
@@ -633,11 +725,63 @@
         window.showAdminModal = function() {
             if(!window.isAdmin) return;
             document.getElementById('admin-modal').style.display = 'flex';
-            window.fetchUsers();
+            window.showUsersTab(); // Start with users tab
         }
 
         window.closeAdminModal = function() {
             document.getElementById('admin-modal').style.display = 'none';
+        }
+
+        window.showUsersTab = function() {
+            document.getElementById('users-tab').classList.add('is-active');
+            document.getElementById('db-tab').classList.remove('is-active');
+            document.getElementById('users-section').style.display = 'block';
+            document.getElementById('databases-section').style.display = 'none';
+            window.fetchUsers();
+            window.populateDatabaseSelectOptions();
+        }
+
+        window.showDatabasesTab = function() {
+            document.getElementById('db-tab').classList.add('is-active');
+            document.getElementById('users-tab').classList.remove('is-active');
+            document.getElementById('databases-section').style.display = 'block';
+            document.getElementById('users-section').style.display = 'none';
+            window.fetchDatabases();
+        }
+
+        window.fetchDatabases = function() {
+            axios.get(`${window.API_URL}/databases`)
+                .then(response => {
+                    const list = document.getElementById('databases-list');
+                    list.innerHTML = '';
+                    response.data.forEach(db => {
+                        list.innerHTML += `<p><strong>${db.display_name}</strong> (${db.name}) - ${db.description}</p>`;
+                    });
+                }).catch(error => {
+                    alert('Error fetching databases: ' + error.message);
+                });
+        }
+
+        window.createDatabase = function() {
+            const name = document.getElementById('new-db-name').value.trim();
+            const displayName = document.getElementById('new-db-display-name').value.trim();
+            const description = document.getElementById('new-db-description').value.trim();
+
+            if (!name || !displayName) {
+                alert('Database name and display name are required');
+                return;
+            }
+
+            axios.post(`${window.API_URL}/databases`, {name, display_name: displayName, description})
+                .then(() => {
+                    window.fetchDatabases();
+                    document.getElementById('new-db-name').value = '';
+                    document.getElementById('new-db-display-name').value = '';
+                    document.getElementById('new-db-description').value = '';
+                    alert('Database created successfully!');
+                }).catch(error => {
+                    alert('Error creating database: ' + (error.response ? error.response.data.error : error.message));
+                });
         }
 
         window.fetchUsers = function() {
@@ -653,15 +797,45 @@
                 });
         }
 
+        window.populateDatabaseSelectOptions = function() {
+            axios.get(`${window.API_URL}/databases`)
+                .then(response => {
+                    const select = document.getElementById('user-databases');
+                    select.innerHTML = '';
+                    response.data.forEach(db => {
+                        const option = document.createElement('option');
+                        option.value = db.id;
+                        option.textContent = db.display_name;
+                        select.appendChild(option);
+                    });
+                }).catch(error => {
+                    console.log('Error populating database options:', error);
+                });
+        }
+
         window.addUser = function() {
             const username = document.getElementById('new-username').value;
             const password = document.getElementById('new-password').value;
             const role = document.getElementById('new-role').value;
-            axios.post(`${window.API_URL}/users`, {username, password, role})
+
+            // Get selected database IDs
+            const dbSelect = document.getElementById('user-databases');
+            const selectedOptions = Array.from(dbSelect.selectedOptions);
+            const databaseIds = selectedOptions.map(option => parseInt(option.value));
+
+            const data = {
+                username,
+                password,
+                role,
+                database_ids: databaseIds
+            };
+
+            axios.post(`${window.API_URL}/users`, data)
                 .then(() => {
                     window.fetchUsers();
                     document.getElementById('new-username').value = '';
                     document.getElementById('new-password').value = '';
+                    // Note: Don't clear role or database selection in case creating multiple similar users
                 }).catch(error => {
                     alert('Error adding user: ' + (error.response ? error.response.data.error : error.message));
                 });
