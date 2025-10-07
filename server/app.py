@@ -27,6 +27,17 @@ CORS(app)  # Enable CORS for the frontend
 DATABASE_DIR = '/app/dbs'
 MASTER_DB = '/app/data/master.db'
 
+# Force fresh init if environment variable is set
+if os.environ.get('FORCE_FRESH_INIT', 'false').lower() == 'true':
+    print("Force fresh init enabled - deleting existing databases")
+    import glob
+    for db_file in glob.glob(os.path.join(DATABASE_DIR, '*.db')):
+        os.remove(db_file)
+        print(f"Deleted {db_file}")
+    if os.path.exists(MASTER_DB):
+        os.remove(MASTER_DB)
+        print(f"Deleted {MASTER_DB}")
+
 print("Starting Flask application initialization...")
 
 # Create directories if they don't exist (important for new deployments)
