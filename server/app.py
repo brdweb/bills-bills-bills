@@ -23,6 +23,10 @@ app = Flask(__name__, static_folder=None)
 app.secret_key = secrets.token_hex(32)  # For session management
 CORS(app)  # Enable CORS for the frontend
 
+# Database configuration - use mounted volumes at /app
+DATABASE_DIR = '/app/dbs'
+MASTER_DB = '/app/data/master.db'
+
 print("Starting Flask application initialization...")
 
 # Create directories if they don't exist (important for new deployments)
@@ -177,10 +181,6 @@ def index():
 def serve_static(path):
     client_dir = os.path.join(os.path.dirname(__file__), '..', 'client')
     return send_from_directory(client_dir, path)
-
-# Database configuration - use mounted volumes at /app
-DATABASE_DIR = '/app/dbs'
-MASTER_DB = '/app/data/master.db'
 
 # Ensure directories exist
 os.makedirs(DATABASE_DIR, exist_ok=True)
