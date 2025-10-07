@@ -809,7 +809,7 @@ def delete_user(id):
 
 @app.route('/api/version', methods=['GET'])
 def get_version():
-    return jsonify({'version': '1.3.1'})
+    return jsonify({'version': '1.3.2'})
 
 @app.route('/change-password', methods=['POST'])
 def change_password():
@@ -820,6 +820,8 @@ def change_password():
     current_password = data.get('current_password')
     new_password = data.get('new_password')
 
+    print(f"Change password attempt for user_id: {user_id}, change_token: {change_token[:10]}..., current_pw: {current_password[:2]}***, new_pw: {len(new_password)} chars")  # Debug log
+
     if not all([user_id, change_token, current_password, new_password]):
         return jsonify({'error': 'All fields are required'}), 400
 
@@ -829,13 +831,17 @@ def change_password():
     master_db = get_master_db()
     user = master_db.execute('SELECT * FROM users WHERE id = ?', (user_id,)).fetchone()
 
+    print(f"User found: {user is not None}, change_token in user: {user['change_token'][:10] if user and user.get('change_token') else 'None'}")  # Debug log
+
     if not user:
         return jsonify({'error': 'User not found'}), 404
 
     if user['change_token'] != change_token:
+        print(f"Token mismatch: expected {user['change_token']}, got {change_token}")  # Debug log
         return jsonify({'error': 'Invalid change token'}), 401
 
     if user['password_hash'] != hashlib.sha256(current_password.encode()).hexdigest():
+        print(f"Password hash mismatch for user {user_id}")  # Debug log
         return jsonify({'error': 'Current password is incorrect'}), 401
 
     try:
