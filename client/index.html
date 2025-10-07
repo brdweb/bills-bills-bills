@@ -702,7 +702,7 @@
             console.log('Saving bill:', data);  // Debug log
 
             if (window.editingId) {
-                axios.put(`${window.API_URL}/bills/${window.editingId}`, data, { timeout: 5000 })
+                axios.put(`/bills/${window.editingId}`, data, { timeout: 5000 })
                     .then(response => {
                         console.log('Bill updated:', response.data);
                         window.fetchBills();
@@ -712,7 +712,7 @@
                         alert('Failed to update bill');
                     });
             } else {
-                axios.post(`${window.API_URL}/bills`, data, { timeout: 5000 })
+                axios.post(`/bills`, data, { timeout: 5000 })
                     .then(response => {
                         console.log('Bill created:', response.data);
                         window.fetchBills();
@@ -732,7 +732,7 @@
                 return;
             }
             // Since SPA, fetch the bill to edit
-            axios.get(`${window.API_URL}/bills`).then(response => {
+            axios.get(`/bills`).then(response => {
                 const bill = response.data.find(b => b.id == id);
                 if (bill) {
                     document.getElementById('modal-title').textContent = 'Edit Bill';
@@ -859,7 +859,7 @@ window.login = function() {
         }
 
         window.fetchDatabases = function() {
-            axios.get(`${window.API_URL}/databases`)
+            axios.get(`/databases`)
                 .then(response => {
                     const list = document.getElementById('databases-list');
                     list.innerHTML = '';
@@ -895,7 +895,7 @@ window.login = function() {
                 return;
             }
 
-            axios.post(`${window.API_URL}/databases`, {name, display_name: displayName, description})
+            axios.post(`/databases`, {name, display_name: displayName, description})
                 .then(() => {
                     window.fetchDatabases();
                     document.getElementById('new-db-name').value = '';
@@ -908,7 +908,7 @@ window.login = function() {
         }
 
         window.fetchUsers = function() {
-            axios.get(`${window.API_URL}/users`)
+            axios.get(`/users`)
                 .then(response => {
                     const list = document.getElementById('users-list');
                     list.innerHTML = '';
@@ -932,7 +932,7 @@ window.login = function() {
         }
 
         window.populateDatabaseSelectOptions = function() {
-            axios.get(`${window.API_URL}/databases`)
+            axios.get(`/databases`)
                 .then(response => {
                     const checkboxContainer = document.getElementById('database-access-checkboxes');
                     checkboxContainer.innerHTML = '';
@@ -968,7 +968,7 @@ window.login = function() {
                 database_ids: databaseIds
             };
 
-            axios.post(`${window.API_URL}/users`, data)
+            axios.post(`/users`, data)
                 .then(response => {
                     console.log('User created successfully:', response.data);
                     window.fetchUsers();
@@ -990,7 +990,7 @@ window.login = function() {
         }
 
         window.deleteUser = function(id) {
-            axios.delete(`${window.API_URL}/users/${id}`)
+            axios.delete(`/users/${id}`)
                 .then(() => {
                     window.fetchUsers();
                 }).catch(error => {
@@ -1012,11 +1012,11 @@ window.login = function() {
 
         window.loadAvailableDatabases = function() {
             // Get all databases
-            axios.get(`${window.API_URL}/databases`)
+            axios.get(`/databases`)
                 .then(response => {
                     const allDatabases = response.data;
                     // Get user's current access
-                    axios.get(`${window.API_URL}/users/${window.currentUserId}/databases`)
+                    axios.get(`/users/${window.currentUserId}/databases`)
                         .then(userResponse => {
                             const userDatabases = userResponse.data || [];
                             const userDbIds = userDatabases.map(db => db.id);
@@ -1071,12 +1071,12 @@ window.login = function() {
                 if (isChecked && !wasChecked) {
                     // Grant access - newly checked
                     promises.push(
-                        axios.post(`${window.API_URL}/databases/${dbId}/access`, {user_id: window.currentUserId})
+                        axios.post(`/databases/${dbId}/access`, {user_id: window.currentUserId})
                     );
                 } else if (!isChecked && wasChecked) {
                     // Revoke access - newly unchecked
                     promises.push(
-                        axios.delete(`${window.API_URL}/databases/${dbId}/access/${window.currentUserId}`)
+                        axios.delete(`/databases/${dbId}/access/${window.currentUserId}`)
                     );
                 }
             });
@@ -1116,7 +1116,7 @@ window.login = function() {
 
         window.deleteDatabase = function(dbId, displayName) {
             // Check if database has users with access
-            axios.get(`${window.API_URL}/databases/${dbId}/access`)
+            axios.get(`/databases/${dbId}/access`)
                 .then(response => {
                     const usersWithAccess = response.data;
                     if (usersWithAccess.length > 0) {
@@ -1132,7 +1132,7 @@ window.login = function() {
                     }
 
                     // Proceed with deletion
-                    axios.delete(`${window.API_URL}/databases/${dbId}`)
+                    axios.delete(`/databases/${dbId}`)
                         .then(response => {
                             const message = response.data.access_removed ?
                                 `Database "${displayName}" deleted successfully!\n\nAccess was automatically removed for ${response.data.access_removed ? 'all users with access' : 'all users'}.` :
@@ -1152,7 +1152,7 @@ window.login = function() {
 
         window.showPaymentHistory = function(name) {
             window.currentBillName = name;
-            axios.get(`${window.API_URL}/bills/${encodeURIComponent(name)}/payments`)
+            axios.get(`/bills/${encodeURIComponent(name)}/payments`)
                 .then(response => {
                     const historyDiv = document.getElementById('payment-history');
                     historyDiv.innerHTML = '';
@@ -1185,7 +1185,7 @@ window.login = function() {
         window.savePayment = function() {
             const amount = parseFloat(document.getElementById('payment-amount').value);
             const date = document.getElementById('payment-date').value;
-            axios.put(`${window.API_URL}/payments/${window.editingPaymentId}`, {amount, payment_date: date})
+            axios.put(`/payments/${window.editingPaymentId}`, {amount, payment_date: date})
                 .then(() => {
                     window.closePaymentModal();
                     window.showPaymentHistory(window.currentBillName);
@@ -1206,7 +1206,7 @@ window.login = function() {
         }
 
         window.confirmDeletePayment = function() {
-            axios.delete(`${window.API_URL}/payments/${window.editingPaymentId}`)
+            axios.delete(`/payments/${window.editingPaymentId}`)
                 .then(() => {
                     window.closeDeleteConfirm();
                     window.closePaymentModal();
