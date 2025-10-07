@@ -809,7 +809,7 @@ def delete_user(id):
 
 @app.route('/api/version', methods=['GET'])
 def get_version():
-    return jsonify({'version': '1.3.3'})
+    return jsonify({'version': '1.3.8'})
 
 @app.route('/change-password', methods=['POST'])
 def change_password():
@@ -854,13 +854,27 @@ def change_password():
         session['user_id'] = user_id
         session['role'] = user['role']
 
+        # Get accessible databases (same as login)
+        accessible_dbs = master_db.execute('''
+            SELECT d.name, d.display_name, d.description
+            FROM databases d
+            JOIN user_database_access uda ON d.id = uda.database_id
+            WHERE uda.user_id = ?
+        ''', (user_id,)).fetchall()
+
+        print(f"Password changed successfully for user {user_id}")  # Debug log
+
         return jsonify({
             'message': 'Password changed successfully',
-            'role': user['role']
+            'role': user['role'],
+            'databases': [dict(db) for db in accessible_dbs]
         }), 200
     except Exception as e:
+        print(f"Error changing password: {e}")  # Debug log
+        import traceback
+        traceback.print_exc()
         master_db.rollback()
-        return jsonify({'error': 'Failed to change password'}), 500
+        return jsonify({'error': f'Failed to change password: {str(e)}'}), 500
 
 # Remove the /init-db endpoint as auto-init handles everything
 if __name__ == '__main__':
