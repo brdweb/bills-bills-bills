@@ -725,7 +725,8 @@
         window.showAdminModal = function() {
             if(!window.isAdmin) return;
             document.getElementById('admin-modal').style.display = 'flex';
-            window.showUsersTab(); // Start with users tab
+            // Show all tabs by default for debugging
+            window.showDatabasesTab(); // Start with databases tab to see if it's visible
         }
 
         window.closeAdminModal = function() {
