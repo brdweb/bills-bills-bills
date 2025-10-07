@@ -1,0 +1,3 @@
+# Ignore database directories to prevent baking development data into image
+data/
+dbs/
