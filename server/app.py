@@ -652,6 +652,38 @@ def init_database():
     os.makedirs(DATABASE_DIR, exist_ok=True)
     os.makedirs(os.path.dirname(MASTER_DB), exist_ok=True)
 
+    # Check write permissions
+    print(f"Checking write permissions for master DB dir: {os.path.dirname(MASTER_DB)}")
+    if os.access(os.path.dirname(MASTER_DB), os.W_OK):
+        print("✅ Master DB directory is writable")
+    else:
+        print("❌ Master DB directory is NOT writable")
+
+    print(f"Checking write permissions for DBS dir: {DATABASE_DIR}")
+    if os.access(DATABASE_DIR, os.W_OK):
+        print("✅ DBS directory is writable")
+    else:
+        print("❌ DBS directory is NOT writable")
+
+    # Test file creation
+    master_test_file = os.path.join(os.path.dirname(MASTER_DB), 'test.txt')
+    try:
+        with open(master_test_file, 'w') as f:
+            f.write('test')
+        print("✅ Successfully wrote test file to master DB dir")
+        os.remove(master_test_file)
+    except Exception as e:
+        print(f"❌ Failed to write test file to master DB dir: {str(e)}")
+
+    dbs_test_file = os.path.join(DATABASE_DIR, 'test.txt')
+    try:
+        with open(dbs_test_file, 'w') as f:
+            f.write('test')
+        print("✅ Successfully wrote test file to DBS dir")
+        os.remove(dbs_test_file)
+    except Exception as e:
+        print(f"❌ Failed to write test file to DBS dir: {str(e)}")
+
     # Initialize master database
     master_db = get_master_db()
     master_db.execute('''CREATE TABLE IF NOT EXISTS users (
@@ -753,33 +785,44 @@ if __name__ == '__main__':
 
         # Populate the databases exactly as in init-db endpoint
         try:
-            master_db.execute('''CREATE TABLE IF NOT EXISTS users (
+            # Connect to master DB (this will create the file if missing)
+            master_db = sqlite3.connect(MASTER_DB)
+            print(f"✅ Connected to master DB at {MASTER_DB}")
+            master_db.row_factory = sqlite3.Row
+
+            master_db.execute('''CREATE TABLE users (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 username TEXT UNIQUE NOT NULL,
                 password_hash TEXT NOT NULL,
                 role TEXT DEFAULT 'user',
                 password_change_required BOOLEAN DEFAULT FALSE
             )''')
-            master_db.execute('''CREATE TABLE IF NOT EXISTS databases (
+            print("✅ Created users table in master DB")
+
+            master_db.execute('''CREATE TABLE databases (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 name TEXT UNIQUE NOT NULL,
                 display_name TEXT NOT NULL,
                 description TEXT DEFAULT '',
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )''')
-            master_db.execute('''CREATE TABLE IF NOT EXISTS user_database_access (
+            print("✅ Created databases table in master DB")
+
+            master_db.execute('''CREATE TABLE user_database_access (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 user_id INTEGER REFERENCES users(id),
                 database_id INTEGER REFERENCES databases(id),
                 UNIQUE(user_id, database_id)
             )''')
+            print("✅ Created user_database_access table in master DB")
 
             # Create default admin user
             admin_hash = hashlib.sha256("password".encode()).hexdigest()
-            master_db.execute("INSERT INTO users (username, password_hash, role) VALUES (?, ?, ?)",
-                             ("admin", admin_hash, "admin"))
+            master_db.execute("INSERT INTO users (username, password_hash, role, password_change_required) VALUES (?, ?, ?, ?)",
+                             ("admin", admin_hash, "admin", True))
+            print("✅ Created default admin user")
 
-            # Create single empty 'personal' database
+            # Create single empty 'personal' database entry
             master_db.execute("INSERT INTO databases (name, display_name, description) VALUES (?, ?, ?)",
                              ("personal", "Personal Finances", "Personal bills and expenses"))
 
@@ -813,13 +856,16 @@ if __name__ == '__main__':
             master_db.execute('INSERT INTO user_database_access (user_id, database_id) VALUES (?, (SELECT id FROM databases WHERE name = ?))',
                              (admin_id, "personal"))
             master_db.commit()
+            master_db.close()
 
             print("✅ Fresh deployment initialization complete!")
             print("📝 Admin login: admin/password")
             print("🔒 Password change required on first login")
 
         except Exception as e:
-            print(f"❌ Fresh deployment initialization failed: {e}")
+            print(f"❌ Fresh deployment initialization failed: {str(e)}")
+            import traceback
+            traceback.print_exc()
             raise
 
     # Initialize master database
