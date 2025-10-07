@@ -65,7 +65,7 @@
 
 <!-- Footer -->
 <footer style="position: fixed; bottom: 0; left: 0; right: 0; background: #f8f9fa; padding: 5px 10px; border-top: 1px solid #dee2e6; text-align: center; font-size: 12px; color: #6c757d;">
-        Bills Bills Bills v1.3.2 - Licensed under MIT
+        Bills Bills Bills v1.3.3 - Licensed under MIT
     </footer>
 
     <!-- Modal for editing/adding bill -->
@@ -444,10 +444,8 @@
 
 
     <script type="text/javascript">
-        window.API_URL = 'http://localhost:5000';
-
         window.fetchBills = function() {
-            axios.get(`${window.API_URL}/bills`, { timeout: 5000 })
+            axios.get('/bills', { timeout: 5000 })
                 .then(function(response) {
                     var bills = response.data;
                     window.renderBills(bills);
@@ -468,7 +466,7 @@
         }
 
         window.checkLoginStatus = function() {
-            axios.get(`${window.API_URL}/me`)
+            axios.get('/me')
                 .then(response => {
                     window.isLoggedIn = true;
                     window.role = response.data.role;
@@ -524,7 +522,7 @@
 
         window.selectDatabase = function(dbName) {
             if (!dbName) return;
-            axios.post(`${window.API_URL}/select-db/${dbName}`)
+            axios.post(`/select-db/${dbName}`)
                 .then(() => {
                     window.fetchBills();
                     alert(`Switched to database: ${dbName}`);
@@ -535,7 +533,7 @@
         }
 
         window.logout = function() {
-            axios.post(`${window.API_URL}/logout`)
+            axios.post(`/logout`)
                 .then(() => {
                     window.isLoggedIn = false;
                     window.role = null;
@@ -667,7 +665,7 @@
             const amount = parseFloat(document.getElementById('pay-amount').value);
             const advance_due = document.getElementById('advance-due').checked;
             if (amount > 0) {
-                axios.post(`${window.API_URL}/bills/${window.payingId}/pay`, {amount, advance_due})
+            axios.post(`/bills/${window.payingId}/pay`, {amount, advance_due})
                     .then(() => {
                         window.closePayModal();
                         window.fetchBills();
