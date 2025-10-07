@@ -10,5 +10,5 @@ COPY . .
 
 EXPOSE 5000
 
-CMD ["python", "server/app.py"]
-# Force rebuild
+# Use Gunicorn for production WSGI server
+CMD ["gunicorn", "--bind", "0.0.0.0:5000", "--workers", "1", "--worker-class", "sync", "server.app:app"]

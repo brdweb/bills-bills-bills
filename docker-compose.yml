@@ -2,7 +2,8 @@ version: '3.8'
 
 services:
   bills-app:
-    image: ghcr.io/brdweb/bills-bills-bills:v0.2
+    image: ghcr.io/brdweb/bills-bills-bills:latest
+    container_name: bills-bills-bills
     ports:
       - "5000:5000"
     restart: unless-stopped
