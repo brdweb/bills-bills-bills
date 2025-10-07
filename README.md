@@ -1,208 +1,169 @@
-# 📊 Bills, Bills, Bills! Expense Tracker v0.1
+# 💵 Bills, Bills, Bills! Expense Tracker v0.2
 
-A **multi-user** web application for tracking recurring monthly expenses and payments with **complete data separation**. Inspired by Chronicle on MacOS.
+A **secure multi-user** web application for tracking recurring monthly expenses and payments with **complete data separation**. Inspired by Chronicle on MacOS.
 
-## 🎯 What You Can Do
+## 🔥 What's New in v0.2
+- **Enhanced Security**: Default admin password must be changed on first login
+- **Improved Database Migrations**: Automatic handling of database schema updates
+- **Production-Ready**: Optimized for deployment with persistent data
 
-- **Multi-Database Support**: Complete data isolation between user groups
-- **Track Bills**: Add monthly, quarterly, or yearly recurring expenses
-- **Record Payments**: Log payments with automatic bill creation
-- **View History**: See payment history for any bill
-- **User Management**: Admin controls for users and database access
-- **Database Administration**: Create separate databases for different purposes
-- **Customize Icons**: Choose from 44+ Material Design icons
-- **Responsive Design**: Works on desktop, tablet, and mobile
+## 🎯 Features
+
+- **🔐 Secure Access**: Forced password change for default admin accounts
+- **👥 Multi-Database**: Complete data isolation between user groups
+- **📊 Track Expenses**: Monthly, quarterly, or yearly recurring bills
+- **💰 Payment Logging**: Record payments with automatic bill cycling
+- **📚 Payment History**: Full history with edit/delete capabilities
+- **👨‍💼 Admin Controls**: User and database management
+- **🎨 Custom Icons**: 44+ Material Design icons
+- **📱 Responsive**: Works on desktop, tablet, and mobile
 
 ## 🚀 Quick Start
 
-### Method 1: Docker Compose (Easiest - Includes Persistent Storage)
+### Prerequisites
+- Docker Desktop installed and running
+- Web browser
 
-1. **Install Docker** (if you haven't already)
-2. **Clone or download** this repository
-3. **Run the application:**
-   ```bash
-   docker-compose up -d
-   ```
+### Run the Application
 
-4. **Open your browser** to: http://localhost:5000
+**Pull the latest release:**
+```bash
+docker pull ghcr.io/[your-username]/bills-bills-bills:v0.2
+```
 
-5. **Login with:**
-   - Username: `admin`
-   - Password: `password`
+**Run with persistent data:**
+```bash
+mkdir data dbs  # Create directories for data persistence
+docker run -d \
+  --name bills-app \
+  -p 5000:5000 \
+  -v $(pwd)/data:/app/data \
+  -v $(pwd)/dbs:/app/dbs \
+  ghcr.io/[your-username]/bills-bills-bills:v0.2
+```
 
-### Method 2: Docker Run
+**Open your browser** and visit: http://localhost:5000
 
-1. **Build the application:**
-   ```bash
-   docker build -t bills-app:v0.1 .
-   ```
+## 🔐 First Login
 
-2. **Run the container:**
-   ```bash
-   docker run -d -p 5000:5000 -v ${PWD}/data:/app/data -v ${PWD}/dbs:/app/dbs bills-app:v0.1
-   ```
+Login with default credentials:
+- **Username:** `admin`
+- **Password:** `password`
 
-3. **Open your browser** to: http://localhost:5000
+⚠️ **Security Notice:** You will be **required to change the password** on first login.
 
-## 💡 Using the Multi-User System
+## 💡 How to Use
 
-### After Login
+### 1. Database Selection
+After login, select your database from the dropdown:
+- **personal** - Your personal finances (default)
 
-Upon successful login, you'll see your available databases. The system includes:
+### 2. Add Your First Bill
+1. Click the **"Add Bill"** button (➕)
+2. Enter bill details:
+   - Name: "Internet", "Rent", etc.
+   - Amount: Fixed amount or check "Varies" for variable costs
+   - Frequency: Monthly, Quarterly, or Yearly
+   - Due date and optional auto-payment setting
 
-- **personal**: Personal Finances (created by default)
-- Additional databases as created by admin
-
-### Database Selection
-
-1. Click the **"Switch Database"** dropdown
-2. Select the database you want to work with
-3. All data entry and viewing will use that database
-
-### Creating Databases (Admin Only)
-
-Admins can create separate databases for different purposes:
-
-1. Go to **Admin Panel** → **Database Management**
-2. Click **"Create Database"**
-3. Fill in:
-   - Name: `family-finances`
-   - Display Name: `Family Finances`
-   - Description: `Shared family expenses`
-4. Grant access to specific users
-
-## 👥 User & Database Management
-
-### Creating Users
-
-1. Go to **Admin Panel** → **User Management**
-2. Click **"Add User"**
-3. Select which databases they can access
-4. Assign admin privileges if needed
-
-### Database Permissions
-
-- Each user can be granted access to multiple databases
-- Complete data isolation - users only see data from accessible databases
-- Admin can create new databases and assign users
-
-## 💡 How to Use (Within a Database)
-
-After selecting a database:
-
-### 📝 Adding a Bill
-1. Click the **📝 Add Bill** button
-2. Fill in bill details:
-   - Name (e.g., "Electricity", "Internet")
-   - Amount (or check "Varies" for variable amounts)
-   - Frequency (Monthly, Quarterly, Yearly)
-   - Next due date
-   - Icons (search from dropdown)
-   - Auto-payment checkbox
-
-### 💰 Recording Payments
-1. Click the **💸 Pay** button on any bill
+### 3. Record Payments
+1. Click **"Pay"** on any bill
 2. Enter payment amount
-3. Set next due date (optional)
-4. Click "Record Payment"
+3. Choose to advance due date automatically
+4. Payment recorded! 🎉
 
-### 📚 Viewing History
-1. Click on any payment amount
-2. See full payment history for that bill
-3. Edit or delete payments if needed
+### 4. View Payment History
+1. Click on any bill's payment amount
+2. View, edit, or delete payment records
+
+## 👥 User & Database Management (Admin Only)
+
+### Admin Panel
+- **Note:** Only admins can access the Admin Panel
+- Click the **"Admin"** button after login
+
+### Database Management
+1. Create separate databases for different purposes (family, business, etc.)
+2. Grant specific user access to databases
+3. Complete data isolation between databases
+
+### User Management
+1. Add new users through the Admin Panel
+2. Assign admin privileges when needed
+3. Control database access permissions
 
 ## 🛠️ Application Management
 
-### Docker Compose (Recommended)
-
+### Start Application
 ```bash
-# Start application
-docker-compose up -d
-
-# View logs
-docker-compose logs -f
-
-# Stop application
-docker-compose down
-
-# Update to new version
-docker-compose pull && docker-compose up -d
+docker start bills-app
 ```
 
-### Persistent Data
+### View Logs
+```bash
+docker logs -f bills-app
+```
 
-The `docker-compose.yml` includes volume mounts for:
-- `./dbs` - Individual user databases (SQLite files)
-- `./data` - Master database (users and permissions)
+### Stop Application
+```bash
+docker stop bills-app
+```
 
-**Keep these directories for data persistence!**
+### Update to New Version
+```bash
+docker pull ghcr.io/[your-username]/bills-bills-bills:v0.2
+docker stop bills-app
+docker rm bills-app
+# Rerun the docker run command above
+```
 
-## 🔧 Architecture
+### Data Persistence
+- **data/** directory: User accounts, permissions, and system settings
+- **dbs/** directory: Individual user databases (one per database you create)
+- **Never delete these directories if you want to keep your data!**
 
-### Database Structure
+## 🚨 Security Features
 
-**Master Database** (`data/master.db`):
-- `users` - User accounts and authentication
-- `databases` - Available databases
-- `user_database_access` - Permissions matrix
-
-**User Databases** (`dbs/*.db`):
-- `bills` - Bill entries and metadata
-- `payments` - Payment transaction history
-
-### Security Features
-
-- **Data Isolation**: Complete separation between user databases
-- **Access Control**: Granular database-level permissions
-- **Session Management**: Secure authentication and authorization
-- **Input Sanitization**: Database names and user inputs validated
-- **Admin Controls**: Comprehensive user and database administration
+- **🔒 Forced Password Change**: Default admin credentials require immediate password update
+- **🛡️ Data Isolation**: Complete separation between different user databases
+- **🔐 Secure Authentication**: Session-based authentication with automatic timeouts
+- **📝 Input Validation**: All user inputs are properly sanitized
+- **👮 Admin Controls**: Granular permissions and access control
 
 ## ❓ Troubleshooting
 
-### Can't Create Database?
-- Database names must be alphanumeric + underscores/hyphens only
-- Each database name must be unique
-- Admin privileges required
+### Can't Access Admin Panel?
+- Ensure you're logged in as an admin user
+- Check that the Admin button appears after login
 
-### No Databases Available?
-- Contact admin to grant database access
-- Default "personal" database should be available for admin
+### Login Problems?
+- Verify default credentials: `admin` / `password`
+- If admin login succeeds, you may need to change the password first
 
-### Data Persistence Issues?
-- Ensure volume mounts are working: `docker-compose.yml`
-- Don't delete the `data/` and `dbs/` directories
+### Data Loss?
+- Check that volume mounts are working properly
+- Ensure `data/` and `dbs/` directories exist and are writable
+
+### Database Errors?
+- Restart the application (`docker restart bills-app`)
+- Check logs for detailed error messages
+- Contact support if persistent issues occur
+
+## 📞 Support
+
+For technical issues, please check:
+1. Application logs (`docker logs bills-app`)
+2. Volume mount configurations
+3. Docker Desktop status
 
 ## 🏗️ Technical Details
 
-**Frontend:** Vanilla JavaScript, Bulma CSS, Material Icons, HTML5
-**Backend:** Flask Python web framework with session management
-**Database:** Multi-SQLite architecture with access control
-**Deployment:** Docker container ready with persistent volumes
-
-### API Endpoints
-
-**Authentication:**
-- `POST /login` - User login with database listing
-- `POST /logout` - Session termination
-- `GET /me` - Current session info
-
-**Database Selection:**
-- `POST /select-db/<name>` - Switch active database
-- `GET /databases` - List all databases (admin)
-- `POST /databases` - Create new database (admin)
-
-**Data Operations:**
-- `GET/POST /bills` - Bill management
-- `PUT/DELETE /bills/<id>` - Update/delete bills
-- `POST /bills/<id>/pay` - Record payments
-- `GET /bills/<name>/payments` - Payment history
-
-**Administration:**
-- `GET/POST /users` - User management
-- `GET /databases/<id>/access` - View database permissions
-- `POST/DELETE /databases/<id>/access/<user_id>` - Grant/revoke access
+**Docker Image:** `ghcr.io/[your-username]/bills-bills-bills:v0.2`
+**Architecture:** Multi-SQLite database system with access control
+**Frontend:** Pure HTML/CSS/JavaScript (No frameworks)
+**Backend:** Python Flask with session management
+**Database:** SQLite with database-level isolation
 
 ---
 
-**Ready to organize your finances with complete privacy and separation? Get started with Bills Bills Bills! 🎉**
+**Ready to organize your finances securely? Get started with Bills, Bills, Bills! 🚀**
