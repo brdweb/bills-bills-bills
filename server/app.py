@@ -738,14 +738,18 @@ if __name__ == '__main__':
     os.makedirs(DATABASE_DIR, exist_ok=True)
     os.makedirs(os.path.dirname(MASTER_DB), exist_ok=True)
 
-    # AUTO-INITIALIZE IF FRESH DEPLOYMENT
+    # AUTO-INITIALIZE IF FRESH DEPLOYMENT (check again after startup)
+    import time
+    time.sleep(1)  # Give mounts time to settle
+
     master_db_exists = os.path.exists(MASTER_DB)
     personal_db_exists = os.path.exists(os.path.join(DATABASE_DIR, "personal.db"))
 
+    print(f"Database check - Master DB: {MASTER_DB} exists: {master_db_exists}")
+    print(f"Database check - Personal DB: {os.path.join(DATABASE_DIR, 'personal.db')} exists: {personal_db_exists}")
+
     if not master_db_exists or not personal_db_exists:
         print("Fresh deployment detected! Auto-initializing databases...")
-        print(f"Master DB exists: {master_db_exists}")
-        print(f"Personal DB exists: {personal_db_exists}")
 
         # Populate the databases exactly as in init-db endpoint
         try:
