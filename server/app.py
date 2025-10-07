@@ -247,6 +247,15 @@ def apply_master_migrations(db):
         # Column likely already exists, ignore
         pass
 
+    try:
+        # Add change_token column if it doesn't exist
+        db.execute("ALTER TABLE users ADD COLUMN change_token TEXT")
+        db.commit()
+        print("Added change_token column to users table")
+    except sqlite3.OperationalError:
+        # Column likely already exists, ignore
+        pass
+
 def get_db(db_name=None):
     """Get connection to specific user database"""
     if db_name is None:
@@ -491,8 +500,6 @@ def login():
                 master_db.commit()
                 requires_change = True
 
-            session['user_id'] = user['id']
-            session['role'] = user['role']
             print(f"Login successful for user: {username}")  # Debug log
 
             response = {
@@ -501,8 +508,19 @@ def login():
                 'password_change_required': requires_change
             }
 
-            # Only provide databases if password change is not required
-            if not requires_change:
+            if requires_change:
+                # Generate change token
+                change_token = secrets.token_hex(32)
+                master_db.execute('UPDATE users SET change_token = ? WHERE id = ?', (change_token, user['id']))
+                master_db.commit()
+                response['user_id'] = user['id']
+                response['change_token'] = change_token
+            else:
+                # Set session only if no change required
+                session['user_id'] = user['id']
+                session['role'] = user['role']
+
+                # Provide databases
                 accessible_dbs = master_db.execute('''
                     SELECT d.name, d.display_name, d.description
                     FROM databases d
@@ -790,31 +808,46 @@ def delete_user(id):
     return jsonify({'message': 'User deleted'})
 
 @app.route('/change-password', methods=['POST'])
-@login_required
 def change_password():
-    """Change user password"""
+    """Change user password with token for initial change"""
     data = request.get_json()
+    user_id = data.get('user_id')
+    change_token = data.get('change_token')
     current_password = data.get('current_password')
     new_password = data.get('new_password')
 
-    if not current_password or not new_password:
-        return jsonify({'error': 'Current password and new password required'}), 400
+    if not all([user_id, change_token, current_password, new_password]):
+        return jsonify({'error': 'All fields are required'}), 400
 
     if len(new_password) < 6:
         return jsonify({'error': 'New password must be at least 6 characters long'}), 400
 
     master_db = get_master_db()
-    user = master_db.execute('SELECT * FROM users WHERE id = ?', (session['user_id'],)).fetchone()
+    user = master_db.execute('SELECT * FROM users WHERE id = ?', (user_id,)).fetchone()
 
-    if not user or user['password_hash'] != hashlib.sha256(current_password.encode()).hexdigest():
+    if not user:
+        return jsonify({'error': 'User not found'}), 404
+
+    if user['change_token'] != change_token:
+        return jsonify({'error': 'Invalid change token'}), 401
+
+    if user['password_hash'] != hashlib.sha256(current_password.encode()).hexdigest():
         return jsonify({'error': 'Current password is incorrect'}), 401
 
     try:
         new_hash = hashlib.sha256(new_password.encode()).hexdigest()
-        master_db.execute('UPDATE users SET password_hash = ?, password_change_required = ? WHERE id = ?',
-                         (new_hash, False, session['user_id']))
+        master_db.execute('UPDATE users SET password_hash = ?, password_change_required = ?, change_token = ? WHERE id = ?',
+                         (new_hash, False, None, user_id))
         master_db.commit()
-        return jsonify({'message': 'Password changed successfully'}), 200
+
+        # Now set the session
+        session['user_id'] = user_id
+        session['role'] = user['role']
+
+        return jsonify({
+            'message': 'Password changed successfully',
+            'role': user['role']
+        }), 200
     except Exception as e:
         master_db.rollback()
         return jsonify({'error': 'Failed to change password'}), 500

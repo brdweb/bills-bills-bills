@@ -65,7 +65,7 @@
 
     <!-- Footer -->
 <footer style="position: fixed; bottom: 0; left: 0; right: 0; background: #f8f9fa; padding: 5px 10px; border-top: 1px solid #dee2e6; text-align: center; font-size: 12px; color: #6c757d;">
-        Bills Bills Bills v1.2.9 - Licensed under MIT
+        Bills Bills Bills v1.3.0 - Licensed under MIT
     </footer>
 
     <!-- Modal for editing/adding bill -->
@@ -783,7 +783,7 @@
             }
         }
 
-        window.login = function() {
+window.login = function() {
             var username = document.getElementById('login-username').value;
             var password = document.getElementById('login-password').value;
 
@@ -801,6 +801,8 @@
                     // Check if password change is required
                     if (response.data.password_change_required) {
                         // Show password change modal instead of finishing login
+                        window.changeUserId = response.data.user_id;
+                        window.changeToken = response.data.change_token;
                         document.getElementById('password-change-modal').style.display = 'flex';
                         window.closeLoginModal();
                         return;
@@ -1219,7 +1221,7 @@
                 });
         }
 
-        window.changePassword = function() {
+window.changePassword = function() {
             const currentPassword = document.getElementById('current-password').value;
             const newPassword = document.getElementById('new-password-change').value;
             const confirmPassword = document.getElementById('confirm-new-password').value;
@@ -1240,6 +1242,8 @@
             }
 
             axios.post(`${window.API_URL}/change-password`, {
+                user_id: window.changeUserId,
+                change_token: window.changeToken,
                 current_password: currentPassword,
                 new_password: newPassword
             })
