@@ -2,12 +2,17 @@ version: '3.8'
 
 services:
   bills-app:
-    image: bills-bills-bills:v0.1
+    build: .
     ports:
       - "5000:5000"
-    environment:
-      - FLASK_DEBUG=false
     restart: unless-stopped
+    command: >
+      sh -c "
+        if [ -f /app/requirements.txt ]; then
+          pip install -r /app/requirements.txt
+        fi &&
+        gunicorn --bind 0.0.0.0:5000 --workers 1 --worker-class sync server.app:app
+      "
     volumes:
       # Persistent data storage for all databases
       - ./data:/app/data

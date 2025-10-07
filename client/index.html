@@ -17,6 +17,11 @@
         .bill-date { flex: 1; }
         .bill-actions { flex: 1; }
         .bill-icon { margin-right: 10px; }
+
+        /* Ensure proper z-index layering for modals */
+        #user-access-modal { z-index: 1200; }
+        #admin-modal { z-index: 1100; }
+        #bill-modal, #login-modal, #payment-modal, #pay-modal, #delete-confirm-modal { z-index: 1000; }
     </style>
 </head>
 <body class="has-background-light">
@@ -200,48 +205,83 @@
 
                 <!-- Users Tab -->
                 <div id="users-section">
-                    <div id="users-list"></div>
-                    <div class="columns">
-                        <div class="column">
-                            <div class="field">
-                                <label class="label">Username</label>
-                                <div class="control">
-                                    <input class="input" type="text" id="new-username" placeholder="Username">
-                                </div>
-                            </div>
-                        </div>
-                        <div class="column">
-                            <div class="field">
-                                <label class="label">Password</label>
-                                <div class="control">
-                                    <input class="input" type="password" id="new-password" placeholder="Password">
-                                </div>
-                            </div>
-                        </div>
-                        <div class="column">
-                            <div class="field">
-                                <label class="label">Role</label>
-                                <div class="control">
-                                    <div class="select">
-                                        <select id="new-role">
-                                            <option value="user">User</option>
-                                            <option value="admin">Admin</option>
-                                        </select>
+                    <div id="users-list" style="margin-bottom: 20px;"></div>
+
+                    <!-- User Access Management Modal -->
+                    <div id="user-access-modal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); justify-content:center; align-items:center;">
+                        <div class="modal-card" style="width: 500px;">
+                            <header class="modal-card-head">
+                                <p id="access-modal-title" class="modal-card-title">Manage Database Access</p>
+                                <button class="delete" aria-label="close" onclick="window.closeUserAccessModal()"></button>
+                            </header>
+                            <section class="modal-card-body">
+                                <div class="field">
+                                    <label class="label">Database Access:</label>
+                                    <div id="grant-access-checkboxes" class="control">
+                                        <!-- Checkboxes for available databases -->
                                     </div>
                                 </div>
-                            </div>
-                            <div class="field">
-                                <label class="label">Database Access</label>
-                                <div class="control">
-                                    <div class="select is-multiple">
-                                        <select id="user-databases" multiple size="3">
-                                        </select>
-                                    </div>
-                                </div>
-                            </div>
+                            </section>
+                            <footer class="modal-card-foot">
+                                <button class="button is-success" onclick="window.saveUserDatabaseAccess()">Update Access</button>
+                                <button class="button" onclick="window.closeUserAccessModal()">Cancel</button>
+                            </footer>
                         </div>
                     </div>
-                    <button class="button is-success" onclick="window.addUser()">Add User</button>
+
+                    <div class="field" style="margin-bottom: 20px;">
+                        <button class="button is-primary" id="show-add-user-form" onclick="window.showAddUserForm()" style="min-width: 150px;">
+                            <span class="icon">
+                                <i class="material-icons">person_add</i>
+                            </span>
+                            Add User
+                        </button>
+                    </div>
+
+                    <div id="add-user-form" style="display:none;">
+                        <hr style="margin-bottom: 20px;">
+                        <div class="columns">
+                            <div class="column">
+                                <div class="field">
+                                    <label class="label">Username</label>
+                                    <div class="control">
+                                        <input class="input" type="text" id="new-username" placeholder="Username">
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="column">
+                                <div class="field">
+                                    <label class="label">Password</label>
+                                    <div class="control">
+                                        <input class="input" type="password" id="new-password" placeholder="Password">
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="column">
+                                <div class="field">
+                                    <label class="label">Role</label>
+                                    <div class="control">
+                                        <div class="select">
+                                            <select id="new-role">
+                                                <option value="user">User</option>
+                                                <option value="admin">Admin</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="field">
+                                    <label class="label">Database Access</label>
+                                    <div id="database-access-checkboxes" class="control">
+                                        <!-- Checkboxes will be populated here -->
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="field" style="margin-top: 20px;">
+                            <button class="button is-success" onclick="window.addUser()">Create User</button>
+                            <button class="button" onclick="window.hideAddUserForm()" style="margin-left: 10px;">Cancel</button>
+                        </div>
+                    </div>
                 </div>
 
                 <!-- Databases Tab -->
@@ -360,6 +400,39 @@
             <footer class="modal-card-foot">
                 <button class="button is-danger" onclick="window.confirmDeletePayment()">Yes</button>
                 <button class="button" onclick="window.closeDeleteConfirm()">No</button>
+            </footer>
+        </div>
+    </div>
+
+    <!-- Password Change Modal -->
+    <div id="password-change-modal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); justify-content:center; align-items:center;">
+        <div class="modal-card" style="width: 400px;">
+            <header class="modal-card-head">
+                <p class="modal-card-title">Change Password</p>
+            </header>
+            <section class="modal-card-body">
+                <p>You must change your password before proceeding.</p>
+                <div class="field">
+                    <label class="label">Current Password</label>
+                    <div class="control">
+                        <input class="input" type="password" id="current-password" placeholder="Current password">
+                    </div>
+                </div>
+                <div class="field">
+                    <label class="label">New Password</label>
+                    <div class="control">
+                        <input class="input" type="password" id="new-password-change" placeholder="New password (min 6 characters)">
+                    </div>
+                </div>
+                <div class="field">
+                    <label class="label">Confirm New Password</label>
+                    <div class="control">
+                        <input class="input" type="password" id="confirm-new-password" placeholder="Confirm new password">
+                    </div>
+                </div>
+            </section>
+            <footer class="modal-card-foot">
+                <button class="button is-success" onclick="window.changePassword()">Change Password</button>
             </footer>
         </div>
     </div>
@@ -678,10 +751,31 @@
 
         window.showLoginModal = function() {
             document.getElementById('login-modal').style.display = 'flex';
+            // Focus on username field and add Enter key handler
+            setTimeout(() => {
+                const usernameField = document.getElementById('login-username');
+                usernameField.focus();
+                usernameField.addEventListener('keypress', window.handleLoginKeypress);
+                document.getElementById('login-password').addEventListener('keypress', window.handleLoginKeypress);
+            }, 100);
         }
 
         window.closeLoginModal = function() {
             document.getElementById('login-modal').style.display = 'none';
+            // Remove event listeners
+            const usernameField = document.getElementById('login-username');
+            const passwordField = document.getElementById('login-password');
+            if (usernameField && passwordField) {
+                usernameField.removeEventListener('keypress', window.handleLoginKeypress);
+                passwordField.removeEventListener('keypress', window.handleLoginKeypress);
+            }
+        }
+
+        window.handleLoginKeypress = function(event) {
+            if (event.key === 'Enter') {
+                event.preventDefault();
+                window.login();
+            }
         }
 
         window.login = function() {
@@ -698,6 +792,15 @@
             })
                 .then(function(response) {
                     console.log('Login successful:', response.data);  // Debug log
+
+                    // Check if password change is required
+                    if (response.data.password_change_required) {
+                        // Show password change modal instead of finishing login
+                        document.getElementById('password-change-modal').style.display = 'flex';
+                        window.closeLoginModal();
+                        return;
+                    }
+
                     alert('Login successful!');
                     window.isLoggedIn = true;
                     window.role = response.data.role;
@@ -725,8 +828,8 @@
         window.showAdminModal = function() {
             if(!window.isAdmin) return;
             document.getElementById('admin-modal').style.display = 'flex';
-            // Show all tabs by default for debugging
-            window.showDatabasesTab(); // Start with databases tab to see if it's visible
+            // Default to users tab
+            window.showUsersTab();
         }
 
         window.closeAdminModal = function() {
@@ -756,7 +859,21 @@
                     const list = document.getElementById('databases-list');
                     list.innerHTML = '';
                     response.data.forEach(db => {
-                        list.innerHTML += `<p><strong>${db.display_name}</strong> (${db.name}) - ${db.description}</p>`;
+                        const dbItem = document.createElement('div');
+                        dbItem.className = 'content';
+                        dbItem.innerHTML = `
+                            <p style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px;">
+                                <strong>${db.display_name} (${db.name})</strong>
+                                <button onclick="window.deleteDatabase(${db.id}, '${db.display_name}')" class="button is-small is-danger" title="Delete Database">
+                                    <span class="icon is-small">
+                                        <i class="material-icons">delete</i>
+                                    </span>
+                                </button>
+                            </p>
+                            <p style="margin-bottom: 10px; color: #666;">${db.description}</p>
+                            <hr style="margin: 10px 0;">
+                        `;
+                        list.appendChild(dbItem);
                     });
                 }).catch(error => {
                     alert('Error fetching databases: ' + error.message);
@@ -791,7 +908,18 @@
                     const list = document.getElementById('users-list');
                     list.innerHTML = '';
                     response.data.forEach(user => {
-                        list.innerHTML += `<p>${user.username} (${user.role}) <button onclick="window.deleteUser(${user.id})">Delete</button></p>`;
+                        list.innerHTML += `<p>${user.username} (${user.role})
+                            <button onclick="window.manageUserAccess(${user.id}, '${user.username}')" class="button is-small" title="Manage Access">
+                                <span class="icon" style="font-size: 16px;">
+                                    <i class="material-icons">edit</i>
+                                </span>
+                            </button>
+                            <button onclick="window.deleteUser(${user.id})" class="button is-small is-danger" title="Delete User">
+                                <span class="icon" style="font-size: 16px;">
+                                    <i class="material-icons">remove</i>
+                                </span>
+                            </button>
+                        </p>`;
                     });
                 }).catch(error => {
                     alert('Error fetching users: ' + error.message);
@@ -801,13 +929,18 @@
         window.populateDatabaseSelectOptions = function() {
             axios.get(`${window.API_URL}/databases`)
                 .then(response => {
-                    const select = document.getElementById('user-databases');
-                    select.innerHTML = '';
+                    const checkboxContainer = document.getElementById('database-access-checkboxes');
+                    checkboxContainer.innerHTML = '';
                     response.data.forEach(db => {
-                        const option = document.createElement('option');
-                        option.value = db.id;
-                        option.textContent = db.display_name;
-                        select.appendChild(option);
+                        const checkboxDiv = document.createElement('div');
+                        checkboxDiv.className = 'field';
+                        checkboxDiv.innerHTML = `
+                            <label class="checkbox">
+                                <input type="checkbox" value="${db.id}">
+                                ${db.display_name}
+                            </label>
+                        `;
+                        checkboxContainer.appendChild(checkboxDiv);
                     });
                 }).catch(error => {
                     console.log('Error populating database options:', error);
@@ -819,10 +952,9 @@
             const password = document.getElementById('new-password').value;
             const role = document.getElementById('new-role').value;
 
-            // Get selected database IDs
-            const dbSelect = document.getElementById('user-databases');
-            const selectedOptions = Array.from(dbSelect.selectedOptions);
-            const databaseIds = selectedOptions.map(option => parseInt(option.value));
+            // Get selected database IDs from checkboxes
+            const checkboxes = document.querySelectorAll('#database-access-checkboxes input[type="checkbox"]:checked');
+            const databaseIds = Array.from(checkboxes).map(cb => parseInt(cb.value));
 
             const data = {
                 username,
@@ -832,13 +964,23 @@
             };
 
             axios.post(`${window.API_URL}/users`, data)
-                .then(() => {
+                .then(response => {
+                    console.log('User created successfully:', response.data);
                     window.fetchUsers();
                     document.getElementById('new-username').value = '';
                     document.getElementById('new-password').value = '';
-                    // Note: Don't clear role or database selection in case creating multiple similar users
+                    // Clear checkbox selections
+                    checkboxes.forEach(cb => cb.checked = false);
+                    alert('User created successfully!');
+                    // Note: Don't clear role in case creating multiple similar users
                 }).catch(error => {
-                    alert('Error adding user: ' + (error.response ? error.response.data.error : error.message));
+                    console.error('Error creating user:', error);
+                    console.error('Response data:', error.response?.data);
+                    console.error('Response status:', error.response?.status);
+                    alert('Error adding user: ' +
+                        (error.response?.data?.error ||
+                         error.response?.data?.message ||
+                         error.message || 'Unknown error'));
                 });
         }
 
@@ -848,6 +990,158 @@
                     window.fetchUsers();
                 }).catch(error => {
                     alert('Error deleting user: ' + (error.response ? error.response.data.error : error.message));
+                });
+        }
+
+        window.manageUserAccess = function(userId, username) {
+            if(!window.isAdmin) return;
+            window.currentUserId = userId;
+            document.getElementById('access-modal-title').textContent = `Manage Database Access for ${username}`;
+            window.loadAvailableDatabases();
+            document.getElementById('user-access-modal').style.display = 'flex';
+        }
+
+        window.closeUserAccessModal = function() {
+            document.getElementById('user-access-modal').style.display = 'none';
+        }
+
+        window.loadAvailableDatabases = function() {
+            // Get all databases
+            axios.get(`${window.API_URL}/databases`)
+                .then(response => {
+                    const allDatabases = response.data;
+                    // Get user's current access
+                    axios.get(`${window.API_URL}/users/${window.currentUserId}/databases`)
+                        .then(userResponse => {
+                            const userDatabases = userResponse.data || [];
+                            const userDbIds = userDatabases.map(db => db.id);
+
+                            const grantContainer = document.getElementById('grant-access-checkboxes');
+                            grantContainer.innerHTML = '';
+                            allDatabases.forEach(db => {
+                                const checkboxDiv = document.createElement('div');
+                                checkboxDiv.className = 'field';
+                                const isChecked = userDbIds.includes(db.id);
+                                checkboxDiv.innerHTML = `
+                                    <label class="checkbox">
+                                        <input type="checkbox" value="${db.id}" ${isChecked ? 'checked' : ''} data-current="${isChecked ? 'true' : 'false'}">
+                                        ${db.display_name}
+                                    </label>
+                                `;
+                                grantContainer.appendChild(checkboxDiv);
+                            });
+                        })
+                        .catch(error => {
+                            console.log('Error loading user databases:', error);
+                            // Fall back to showing all unchecked if user access fails
+                            const grantContainer = document.getElementById('grant-access-checkboxes');
+                            grantContainer.innerHTML = '';
+                            allDatabases.forEach(db => {
+                                const checkboxDiv = document.createElement('div');
+                                checkboxDiv.className = 'field';
+                                checkboxDiv.innerHTML = `
+                                    <label class="checkbox">
+                                        <input type="checkbox" value="${db.id}" data-current="false">
+                                        ${db.display_name}
+                                    </label>
+                                `;
+                                grantContainer.appendChild(checkboxDiv);
+                            });
+                        });
+                })
+                .catch(error => {
+                    console.log('Error loading available databases:', error);
+                });
+        }
+
+        window.saveUserDatabaseAccess = function() {
+            const allCheckboxes = document.querySelectorAll('#grant-access-checkboxes input[type="checkbox"]');
+            const promises = [];
+
+            allCheckboxes.forEach(checkbox => {
+                const dbId = parseInt(checkbox.value);
+                const isChecked = checkbox.checked;
+                const wasChecked = checkbox.getAttribute('data-current') === 'true';
+
+                if (isChecked && !wasChecked) {
+                    // Grant access - newly checked
+                    promises.push(
+                        axios.post(`${window.API_URL}/databases/${dbId}/access`, {user_id: window.currentUserId})
+                    );
+                } else if (!isChecked && wasChecked) {
+                    // Revoke access - newly unchecked
+                    promises.push(
+                        axios.delete(`${window.API_URL}/databases/${dbId}/access/${window.currentUserId}`)
+                    );
+                }
+            });
+
+            if (promises.length === 0) {
+                alert('No changes to apply');
+                return;
+            }
+
+            Promise.all(promises)
+                .then(() => {
+                    alert('Database access updated successfully!');
+                    window.closeUserAccessModal();
+                    window.fetchUsers();
+                })
+                .catch(error => {
+                    console.error('Error updating database access:', error);
+                    alert('Error updating database access: ' + (error.response ? error.response.data.error : error.message));
+                });
+        }
+
+        window.showAddUserForm = function() {
+            document.getElementById('add-user-form').style.display = 'block';
+            document.getElementById('show-add-user-form').style.display = 'none';
+        }
+
+        window.hideAddUserForm = function() {
+            document.getElementById('add-user-form').style.display = 'none';
+            document.getElementById('show-add-user-form').style.display = 'inline-block';
+            // Clear form fields
+            document.getElementById('new-username').value = '';
+            document.getElementById('new-password').value = '';
+            document.getElementById('new-role').value = 'user';
+            const checkboxes = document.querySelectorAll('#database-access-checkboxes input[type="checkbox"]');
+            checkboxes.forEach(cb => cb.checked = false);
+        }
+
+        window.deleteDatabase = function(dbId, displayName) {
+            // Check if database has users with access
+            axios.get(`${window.API_URL}/databases/${dbId}/access`)
+                .then(response => {
+                    const usersWithAccess = response.data;
+                    if (usersWithAccess.length > 0) {
+                        // Database has users with access - show warning dialog
+                        const userNames = usersWithAccess.map(u => u.username).join(', ');
+                        const proceed = confirm(`⚠️ WARNING: The "${displayName}" database has ${usersWithAccess.length} user(s) with access: ${userNames}. \n\nDeleting this database will:\n• Permanently delete all bills and payments\n• Automatically remove access for all users\n\nContinue with deletion?`);
+                        if (!proceed) return;
+                    } else {
+                        // No users have access - regular confirmation
+                        if (!confirm(`Are you sure you want to delete the "${displayName}" database? This will permanently delete all bills and payments in this database.`)) {
+                            return;
+                        }
+                    }
+
+                    // Proceed with deletion
+                    axios.delete(`${window.API_URL}/databases/${dbId}`)
+                        .then(response => {
+                            const message = response.data.access_removed ?
+                                `Database "${displayName}" deleted successfully!\n\nAccess was automatically removed for ${response.data.access_removed ? 'all users with access' : 'all users'}.` :
+                                `Database "${displayName}" deleted successfully!`;
+                            alert(message);
+                            window.fetchDatabases();
+                            window.checkLoginStatus(); // Refresh user's database list
+                        })
+                        .catch(error => {
+                            alert('Error deleting database: ' + (error.response ? error.response.data.error : error.message));
+                        });
+                })
+                .catch(error => {
+                    alert('Error checking database access: ' + error.message);
                 });
         }
 
@@ -917,6 +1211,68 @@
                 })
                 .catch(error => {
                     alert('Error deleting payment');
+                });
+        }
+
+        window.changePassword = function() {
+            const currentPassword = document.getElementById('current-password').value;
+            const newPassword = document.getElementById('new-password-change').value;
+            const confirmPassword = document.getElementById('confirm-new-password').value;
+
+            if (!currentPassword || !newPassword || !confirmPassword) {
+                alert('All fields are required');
+                return;
+            }
+
+            if (newPassword !== confirmPassword) {
+                alert('New passwords do not match');
+                return;
+            }
+
+            if (newPassword.length < 6) {
+                alert('New password must be at least 6 characters long');
+                return;
+            }
+
+            axios.post(`${window.API_URL}/change-password`, {
+                current_password: currentPassword,
+                new_password: newPassword
+            })
+                .then(response => {
+                    alert('Password changed successfully!');
+                    // Now complete the login process
+                    window.isLoggedIn = true;
+                    window.role = response.data.role || 'user'; // Use stored role or default to user
+                    window.isAdmin = (window.role === 'admin');
+                    window.updateAuthButton();
+
+                    // Get available databases (since we couldn't get them during password change)
+                    axios.get(`${window.API_URL}/me`)
+                        .then(meResponse => {
+                            window.updateDatabaseList(meResponse.data.databases);
+                            if (window.isAdmin && !document.getElementById('admin-button')) {
+                                document.querySelector('.block').insertAdjacentHTML('beforeend', '<button id="admin-button" class="button is-warning" onclick="window.showAdminModal()">Admin</button>');
+                            }
+                            if (meResponse.data.current_db) {
+                                document.getElementById('database-select').value = meResponse.data.current_db;
+                            }
+                        });
+
+                    // Clear and close password change modal
+                    document.getElementById('current-password').value = '';
+                    document.getElementById('new-password-change').value = '';
+                    document.getElementById('confirm-new-password').value = '';
+                    document.getElementById('password-change-modal').style.display = 'none';
+
+                    window.fetchBills(); // Refresh data after login
+                })
+                .catch(error => {
+                    const errorMsg = error.response?.data?.error || 'Failed to change password';
+                    alert('Error: ' + errorMsg);
+
+                    // Clear password fields but keep current password field
+                    document.getElementById('new-password-change').value = '';
+                    document.getElementById('confirm-new-password').value = '';
                 });
         }
 
