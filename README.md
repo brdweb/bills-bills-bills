@@ -21,25 +21,16 @@ A **secure multi-user** web application for tracking recurring monthly expenses 
 ## 🚀 Quick Start
 
 ### Prerequisites
-- Docker Desktop installed and running
+- Docker installed and running
 - Web browser
 
 ### Run the Application
 
-**Pull the latest release:**
+**Clone and run with Docker Compose:**
 ```bash
-docker pull ghcr.io/[your-username]/bills-bills-bills:v0.2
-```
-
-**Run with persistent data:**
-```bash
-mkdir data dbs  # Create directories for data persistence
-docker run -d \
-  --name bills-app \
-  -p 5000:5000 \
-  -v $(pwd)/data:/app/data \
-  -v $(pwd)/dbs:/app/dbs \
-  ghcr.io/[your-username]/bills-bills-bills:v0.2
+git clone https://github.com/[your-username]/bills-bills-bills.git
+cd bills-bills-bills
+docker-compose up -d
 ```
 
 **Open your browser** and visit: http://localhost:5000
@@ -96,31 +87,44 @@ After login, select your database from the dropdown:
 
 ### Start Application
 ```bash
-docker start bills-app
+# Using docker-compose (recommended)
+docker-compose up -d
+
+# Or manually
+docker start bills-bills-bills_app_1
 ```
 
 ### View Logs
 ```bash
-docker logs -f bills-app
+# Using docker-compose
+docker-compose logs -f
+
+# Or manually
+docker logs -f bills-bills-bills_app_1
 ```
 
 ### Stop Application
 ```bash
-docker stop bills-app
+# Using docker-compose
+docker-compose down
+
+# Or manually
+docker stop bills-bills-bills_app_1
 ```
 
 ### Update to New Version
 ```bash
-docker pull ghcr.io/[your-username]/bills-bills-bills:v0.2
-docker stop bills-app
-docker rm bills-app
-# Rerun the docker run command above
+git pull origin main
+docker-compose down
+docker-compose build --no-cache
+docker-compose up -d
 ```
 
 ### Data Persistence
-- **data/** directory: User accounts, permissions, and system settings
-- **dbs/** directory: Individual user databases (one per database you create)
-- **Never delete these directories if you want to keep your data!**
+Docker Compose automatically creates persistent data directories:
+- **`data/`** - User accounts, permissions, and system settings (auto-created)
+- **`dbs/`** - Individual user databases (one per database you create, auto-created)
+- **Your data is automatically preserved between deployments!**
 
 ## 🚨 Security Features
 
@@ -145,20 +149,20 @@ docker rm bills-app
 - Ensure `data/` and `dbs/` directories exist and are writable
 
 ### Database Errors?
-- Restart the application (`docker restart bills-app`)
-- Check logs for detailed error messages
+- Restart the application (`docker-compose restart`)
+- Check logs: `docker-compose logs -f`
 - Contact support if persistent issues occur
 
 ## 📞 Support
 
 For technical issues, please check:
-1. Application logs (`docker logs bills-app`)
-2. Volume mount configurations
-3. Docker Desktop status
+1. Application logs (`docker-compose logs -f`)
+2. Volume mount configurations (automatically handled by docker-compose)
+3. Docker installation and availability
 
 ## 🏗️ Technical Details
 
-**Docker Image:** `ghcr.io/[your-username]/bills-bills-bills:v0.2`
+**Deployment:** Docker Compose with persistent volumes
 **Architecture:** Multi-SQLite database system with access control
 **Frontend:** Pure HTML/CSS/JavaScript (No frameworks)
 **Backend:** Python Flask with session management
