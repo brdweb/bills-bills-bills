@@ -787,7 +787,7 @@ window.login = function() {
 
             console.log('Attempting login for:', username);  // Debug log
 
-            axios.post(`${window.API_URL}/login`, {username, password}, {
+            axios.post('/login', {username, password}, {
                 timeout: 5000,
                 headers: {
                     'Content-Type': 'application/json'
@@ -1239,7 +1239,7 @@ window.changePassword = function() {
                 return;
             }
 
-            axios.post(`${window.API_URL}/change-password`, {
+            axios.post('/change-password', {
                 user_id: window.changeUserId,
                 change_token: window.changeToken,
                 current_password: currentPassword,
@@ -1254,7 +1254,7 @@ window.changePassword = function() {
                     window.updateAuthButton();
 
                     // Get available databases (since we couldn't get them during password change)
-                    axios.get(`${window.API_URL}/me`)
+                    axios.get('/me')
                         .then(meResponse => {
                             window.updateDatabaseList(meResponse.data.databases);
                             if (window.isAdmin && !document.getElementById('admin-button')) {
