@@ -45,7 +45,12 @@ A **secure multi-user** web application for tracking recurring monthly expenses 
    docker-compose up -d
    ```
 
-3. **Open your browser** and visit: http://localhost:5000
+3. **If deploying to a fresh directory** - initialize the database:
+   ```bash
+   curl -X POST http://localhost:5000/init-db
+   ```
+
+4. **Open your browser** and visit: http://localhost:5000
 
 ## 🔐 First Login
 

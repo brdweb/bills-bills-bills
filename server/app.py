@@ -644,8 +644,13 @@ def change_password():
 
 @app.route('/init-db', methods=['POST'])
 def init_database():
-    """Initialize database if needed (for debugging)"""
-    print("Running manual database initialization...")
+    """Initialize database if needed - ensures clean first-run setup"""
+    print("Running database initialization check...")
+
+    # Create directories if they don't exist (for fresh deployments)
+    print(f"Ensuring database directories exist...")
+    os.makedirs(DATABASE_DIR, exist_ok=True)
+    os.makedirs(os.path.dirname(MASTER_DB), exist_ok=True)
 
     # Initialize master database
     master_db = get_master_db()
@@ -727,6 +732,11 @@ def init_database():
 
 if __name__ == '__main__':
     print("Starting Flask application initialization...")
+
+    # Create directories if they don't exist (important for new deployments)
+    print(f"Ensuring database directories exist...")
+    os.makedirs(DATABASE_DIR, exist_ok=True)
+    os.makedirs(os.path.dirname(MASTER_DB), exist_ok=True)
 
     # Initialize master database
     print("Initializing master database connection...")
