@@ -680,15 +680,15 @@ def init_database():
         print("Admin user already exists")
         pass
 
-    # Create default 'personal' database if not exists
+    # Create single empty 'personal' database if not exists (admin access only)
     try:
         master_db.execute("INSERT INTO databases (name, display_name, description) VALUES (?, ?, ?)",
                          ("personal", "Personal Finances", "Personal bills and expenses"))
 
-        # Initialize personal database
+        # Initialize empty personal database
         personal_db_path = os.path.join(DATABASE_DIR, "personal.db")
         personal_db = sqlite3.connect(personal_db_path)
-        personal_db.execute('''CREATE TABLE IF NOT EXISTS bills (
+        personal_db.execute('''CREATE TABLE bills (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             name TEXT NOT NULL,
             amount DECIMAL(10,2),
@@ -701,7 +701,7 @@ def init_database():
             icon TEXT DEFAULT 'payment',
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )''')
-        personal_db.execute('''CREATE TABLE IF NOT EXISTS payments (
+        personal_db.execute('''CREATE TABLE payments (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             bill_id INTEGER REFERENCES bills(id),
             amount DECIMAL(10,2),
@@ -710,11 +710,11 @@ def init_database():
         personal_db.commit()
         personal_db.close()
 
-        # Grant admin access to personal database
+        # Grant admin access to personal database ONLY
         admin_id = master_db.execute('SELECT id FROM users WHERE username = ?', ('admin',)).fetchone()[0]
         master_db.execute('INSERT INTO user_database_access (user_id, database_id) VALUES (?, (SELECT id FROM databases WHERE name = ?))',
                          (admin_id, "personal"))
-        print("Default personal database created")
+        print("Single empty personal database created with admin access only")
     except sqlite3.IntegrityError:
         print("Personal database already exists")
         pass
@@ -752,15 +752,23 @@ if __name__ == '__main__':
         UNIQUE(user_id, database_id)
     )''')
 
-    # Create default admin user if not exists
+    # Create default admin user if not exists, OR reset if using old default password
     admin_hash = hashlib.sha256("password".encode()).hexdigest()
-    try:
+    existing_admin = master_db.execute("SELECT * FROM users WHERE username = ?", ("admin",)).fetchone()
+
+    if not existing_admin:
+        # Create new admin user
         master_db.execute("INSERT INTO users (username, password_hash, role) VALUES (?, ?, ?)",
                          ("admin", admin_hash, "admin"))
         print("Default admin user created")
-    except sqlite3.IntegrityError:
-        # Admin exists, that's fine
-        pass
+    else:
+        # Reset admin user to default state if they're still using the default password
+        if existing_admin['password_hash'] == admin_hash:
+            master_db.execute("UPDATE users SET password_change_required = ? WHERE username = ?",
+                             (True, "admin"))
+            print("Admin user reset to require password change")
+
+    master_db.commit()
 
     # Create default 'personal' database if not exists
     try:
