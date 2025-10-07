@@ -807,6 +807,10 @@ def delete_user(id):
     master_db.commit()
     return jsonify({'message': 'User deleted'})
 
+@app.route('/api/version', methods=['GET'])
+def get_version():
+    return jsonify({'version': '1.3.1'})
+
 @app.route('/change-password', methods=['POST'])
 def change_password():
     """Change user password with token for initial change"""
