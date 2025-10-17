@@ -43,9 +43,16 @@
                 <p>Next week: <span id="next-week">0</span></p>
                 <p>Next 21 days: <span id="next-21">0</span></p>
                 <p>Next 30 days: <span id="next-30">0</span></p>
+                <hr>
+                <button id="process-auto-payments" class="button is-small is-info" onclick="window.manualProcessAutoPayments()" style="display: none;">
+                    <span class="icon">
+                        <i class="material-icons">autorenew</i>
+                    </span>
+                    <span>Process Auto-Payments</span>
+                </button>
             </div>
         </div>
-        <div class="column is-8 has-background-white py-4 px-4">
+        <div class="column is-7 has-background-white py-4 px-4">
             <h1 class="title" style="display: inline;">Bills</h1>
             <button style="float: right;" class="button is-small is-primary" onclick="window.addBillModal()">
                 <span class="icon">
@@ -54,7 +61,7 @@
             </button>
             <div id="bills-list" style="margin-bottom: 60px;"></div>
         </div>
-        <div class="column is-2 has-background-white py-4 px-4">
+        <div class="column is-3 has-background-white py-4 px-4">
             <h2 class="title is-5">Calendar</h2>
             <div id="calendar"></div>
             <hr>
@@ -65,7 +72,7 @@
 
 <!-- Footer -->
 <footer style="position: fixed; bottom: 0; left: 0; right: 0; background: #f8f9fa; padding: 8px 10px; border-top: 1px solid #dee2e6; text-align: center; font-size: 12px; color: #6c757d; z-index: 100; height: 40px;">
-        Bills Bills Bills v1.4.0 - Licensed under MIT
+        Bills Bills Bills v1.4.1 - Licensed under MIT
     </footer>
 
     <!-- Modal for editing/adding bill -->
@@ -549,7 +556,14 @@
                     if (response.data.current_db) {
                         document.getElementById('database-select').value = response.data.current_db;
                     }
-                    window.fetchBills();
+                    
+                    // Show auto-payment button for logged-in users
+                    document.getElementById('process-auto-payments').style.display = 'block';
+                    
+                    // Process auto-payments first, then fetch bills
+                    window.processAutoPayments().then(() => {
+                        window.fetchBills();
+                    });
                 })
                 .catch(() => {
                     window.isLoggedIn = false;
@@ -558,6 +572,44 @@
                     window.updateAuthButton();
                     window.updateDatabaseList([]);
                     window.fetchBills(); // Will show empty if not logged in
+                });
+        }
+
+        window.processAutoPayments = function() {
+            return new Promise((resolve) => {
+                if (!window.isLoggedIn) {
+                    resolve();
+                    return;
+                }
+                
+                axios.post('/api/process-auto-payments')
+                    .then(response => {
+                        if (response.data.processed_count > 0) {
+                            console.log(`Auto-processed ${response.data.processed_count} payments`);
+                            // Optionally show a subtle notification
+                            // alert(`Processed ${response.data.processed_count} auto-payments`);
+                        }
+                        resolve();
+                    })
+                    .catch(error => {
+                        console.log('Auto-payment processing error:', error);
+                        resolve(); // Continue even if auto-payment fails
+                    });
+            });
+        }
+
+        window.manualProcessAutoPayments = function() {
+            axios.post('/api/process-auto-payments')
+                .then(response => {
+                    if (response.data.processed_count > 0) {
+                        alert(`Processed ${response.data.processed_count} auto-payments`);
+                        window.fetchBills(); // Refresh the bills list
+                    } else {
+                        alert('No auto-payments were due for processing');
+                    }
+                })
+                .catch(error => {
+                    alert('Error processing auto-payments: ' + (error.response ? error.response.data.error : error.message));
                 });
         }
 
@@ -594,8 +646,11 @@
             if (!dbName) return;
             axios.post(`/select-db/${dbName}`)
                 .then(() => {
-                    window.fetchBills();
-                    alert(`Switched to database: ${dbName}`);
+                    // Process auto-payments first, then fetch bills
+                    window.processAutoPayments().then(() => {
+                        window.fetchBills();
+                        alert(`Switched to database: ${dbName}`);
+                    });
                 })
                 .catch(error => {
                     alert('Error switching database: ' + (error.response ? error.response.data.error : error.message));
@@ -821,8 +876,8 @@
         window.confirmPay = function() {
             const amount = parseFloat(document.getElementById('pay-amount').value);
             const advance_due = document.getElementById('advance-due').checked;
-            if (amount > 0) {
-            axios.post(`/bills/${window.payingId}/pay`, {amount, advance_due})
+            if (amount >= 0 && !isNaN(amount)) {
+                axios.post(`/bills/${window.payingId}/pay`, {amount, advance_due})
                     .then(() => {
                         window.closePayModal();
                         window.fetchBills();
@@ -832,7 +887,7 @@
                         alert('Error recording payment');
                     });
             } else {
-                alert('Please enter a valid amount');
+                alert('Please enter a valid amount (0 or greater)');
             }
         }
 
@@ -1031,7 +1086,11 @@ window.login = function() {
                         document.querySelector('.block').insertAdjacentHTML('beforeend', '<button id="admin-button" class="button is-warning" onclick="window.showAdminModal()">Admin</button>');
                     }
                     window.closeLoginModal();
-                    window.fetchBills(); // Refresh data after login
+                    
+                    // Process auto-payments first, then fetch bills
+                    window.processAutoPayments().then(() => {
+                        window.fetchBills();
+                    });
                 })
                 .catch(function(error) {
                     console.log('Login error:', (error.response && error.response.status) || error.code, (error.response && error.response.data) || error.message);  // Debug log
@@ -1486,7 +1545,10 @@ window.changePassword = function() {
                     document.getElementById('confirm-new-password').value = '';
                     document.getElementById('password-change-modal').style.display = 'none';
 
-                    window.fetchBills(); // Refresh data after login
+                    // Process auto-payments first, then fetch bills
+                    window.processAutoPayments().then(() => {
+                        window.fetchBills();
+                    });
                 })
                 .catch(error => {
                     const errorMsg = error.response?.data?.error || 'Failed to change password';
