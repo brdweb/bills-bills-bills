@@ -500,53 +500,77 @@ def delete_bill(id):
 @app.route('/bills/<int:id>/pay', methods=['POST'])
 @login_required
 def pay_bill(id):
-    data = request.get_json()
-    amount = data['amount']
-    advance_due = data.get('advance_due', True)
-    db = get_db()
-    # Add payment
-    payment_date = datetime.date.today().isoformat()
-    db.execute('INSERT INTO payments (bill_id, amount, payment_date) VALUES (?, ?, ?)', (id, amount, payment_date))
+    try:
+        data = request.get_json()
+        amount = data['amount']
+        advance_due = data.get('advance_due', True)
+        db = get_db()
+        
+        # Get bill first
+        bill = db.execute('SELECT * FROM bills WHERE id = ?', (id,)).fetchone()
+        if not bill or bill['archived']:
+            db.close()
+            return jsonify({'error': 'Bill not found'}), 404
 
-    # Get bill
-    bill = db.execute('SELECT * FROM bills WHERE id = ?', (id,)).fetchone()
-    if not bill or bill['archived']:
-        return jsonify({'message': 'Bill not found'})
+        # Add payment
+        payment_date = datetime.date.today().isoformat()
+        db.execute('INSERT INTO payments (bill_id, amount, payment_date) VALUES (?, ?, ?)', (id, amount, payment_date))
 
-    if advance_due:
-        # Archive current
-        db.execute('UPDATE bills SET archived = 1 WHERE id = ?', (id,))
+        if advance_due:
+            # Archive current
+            db.execute('UPDATE bills SET archived = 1 WHERE id = ?', (id,))
 
-        # Calculate next due date using enhanced logic
-        frequency_config = json.loads(bill.get('frequency_config', '{}'))
-        next_due_date = calculate_next_due_date(
-            bill['next_due'], 
-            bill['frequency'], 
-            bill.get('frequency_type', 'simple'),
-            frequency_config
-        )
+            # Calculate next due date using enhanced logic
+            frequency_config_str = bill['frequency_config'] if 'frequency_config' in bill.keys() and bill['frequency_config'] else '{}'
+            frequency_config = json.loads(frequency_config_str)
+            frequency_type = bill['frequency_type'] if 'frequency_type' in bill.keys() and bill['frequency_type'] else 'simple'
+            
+            next_due_date = calculate_next_due_date(
+                bill['next_due'], 
+                bill['frequency'], 
+                frequency_type,
+                frequency_config
+            )
 
-        # Add new bill with same configuration
-        db.execute('INSERT INTO bills (name, amount, varies, frequency, frequency_type, frequency_config, next_due, auto_payment, icon) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
-                   (bill['name'], bill['amount'], bill['varies'], bill['frequency'], 
-                    bill.get('frequency_type', 'simple'), bill.get('frequency_config', '{}'),
-                    next_due_date.isoformat(), bill['auto_payment'], bill['icon']))
-    db.commit()
-    return jsonify({'message': 'Payment recorded' + ( ' and recurring added' if advance_due else '')}), 200
+            # Add new bill with same configuration
+            db.execute('INSERT INTO bills (name, amount, varies, frequency, frequency_type, frequency_config, next_due, auto_payment, icon) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+                       (bill['name'], bill['amount'], bill['varies'], bill['frequency'], 
+                        frequency_type, frequency_config_str,
+                        next_due_date.isoformat(), bill['auto_payment'], bill['icon']))
+        
+        db.commit()
+        db.close()
+        return jsonify({'message': 'Payment recorded' + ( ' and recurring added' if advance_due else '')}), 200
+        
+    except Exception as e:
+        print(f"Error in pay_bill: {e}")
+        if 'db' in locals():
+            try:
+                db.close()
+            except:
+                pass
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/bills/<string:name>/payments', methods=['GET'])
 @login_required
 def get_payments(name):
-    db = get_db()
-    cur = db.execute("""
-        SELECT p.id, p.amount, p.payment_date
-        FROM payments p
-        JOIN bills b ON p.bill_id = b.id
-        WHERE b.name = ?
-        ORDER BY p.payment_date DESC
-    """, (name,))
-    payments = [dict(row) for row in cur.fetchall()]
-    return jsonify(payments)
+    try:
+        db = get_db()
+        cur = db.execute("""
+            SELECT p.id, p.amount, p.payment_date
+            FROM payments p
+            JOIN bills b ON p.bill_id = b.id
+            WHERE b.name = ?
+            ORDER BY p.payment_date DESC
+        """, (name,))
+        payments = [dict(row) for row in cur.fetchall()]
+        db.close()
+        return jsonify(payments)
+    except Exception as e:
+        print(f"Error in get_payments: {e}")
+        if 'db' in locals():
+            db.close()
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/payments/<int:id>', methods=['PUT'])
 @login_required
@@ -651,6 +675,11 @@ def login():
                     JOIN user_database_access uda ON d.id = uda.database_id
                     WHERE uda.user_id = ?
                 ''', (user['id'],)).fetchall()
+                
+                # Set default database (first available database)
+                if accessible_dbs:
+                    session['db_name'] = accessible_dbs[0]['name']
+                
                 response['databases'] = [dict(db) for db in accessible_dbs]
 
             return jsonify(response), 200
@@ -935,7 +964,78 @@ def delete_user(id):
 
 @app.route('/api/version', methods=['GET'])
 def get_version():
-    return jsonify({'version': '1.4.0', 'features': ['enhanced_frequencies', 'automated_migrations']})
+    return jsonify({'version': '1.4.1', 'features': ['enhanced_frequencies', 'automated_migrations', 'auto_payments', 'zero_dollar_payments']})
+
+@app.route('/api/process-auto-payments', methods=['POST'])
+@login_required
+def process_auto_payments():
+    """Process bills marked for auto-payment that are due"""
+    try:
+        db = get_db()
+        today = datetime.date.today()
+        
+        # Find bills marked for auto-payment that are due or overdue
+        auto_bills = db.execute('''
+            SELECT * FROM bills 
+            WHERE auto_payment = 1 
+            AND archived = 0 
+            AND date(next_due) <= date(?)
+        ''', (today.isoformat(),)).fetchall()
+        
+        processed_count = 0
+        
+        for bill in auto_bills:
+            try:
+                # Use the bill amount, or 0 if it varies
+                payment_amount = bill['amount'] if bill['amount'] is not None else 0
+                
+                # Add payment record
+                db.execute('INSERT INTO payments (bill_id, amount, payment_date) VALUES (?, ?, ?)', 
+                          (bill['id'], payment_amount, today.isoformat()))
+                
+                # Archive current bill
+                db.execute('UPDATE bills SET archived = 1 WHERE id = ?', (bill['id'],))
+                
+                # Calculate next due date
+                frequency_config_str = bill['frequency_config'] if 'frequency_config' in bill.keys() and bill['frequency_config'] else '{}'
+                frequency_config = json.loads(frequency_config_str)
+                frequency_type = bill['frequency_type'] if 'frequency_type' in bill.keys() and bill['frequency_type'] else 'simple'
+                
+                next_due_date = calculate_next_due_date(
+                    bill['next_due'], 
+                    bill['frequency'], 
+                    frequency_type,
+                    frequency_config
+                )
+                
+                # Create new bill for next period
+                db.execute('''INSERT INTO bills 
+                    (name, amount, varies, frequency, frequency_type, frequency_config, next_due, auto_payment, icon) 
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)''',
+                    (bill['name'], bill['amount'], bill['varies'], bill['frequency'], 
+                     frequency_type, frequency_config_str,
+                     next_due_date.isoformat(), bill['auto_payment'], bill['icon']))
+                
+                processed_count += 1
+                print(f"Auto-processed payment for {bill['name']}: ${payment_amount}")
+                
+            except Exception as e:
+                print(f"Error processing auto-payment for bill {bill['id']}: {e}")
+                continue
+        
+        db.commit()
+        db.close()
+        
+        return jsonify({
+            'message': f'Processed {processed_count} auto-payments',
+            'processed_count': processed_count
+        }), 200
+        
+    except Exception as e:
+        print(f"Error in process_auto_payments: {e}")
+        if 'db' in locals():
+            db.close()
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/api/migration-status', methods=['GET'])
 @admin_required
@@ -1019,6 +1119,10 @@ def change_password():
             JOIN user_database_access uda ON d.id = uda.database_id
             WHERE uda.user_id = ?
         ''', (user_id,)).fetchall()
+        
+        # Set default database (first available database)
+        if accessible_dbs:
+            session['db_name'] = accessible_dbs[0]['name']
 
         print(f"Password changed successfully for user {user_id}")  # Debug log
 
