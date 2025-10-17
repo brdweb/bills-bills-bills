@@ -25,7 +25,7 @@
     </style>
 </head>
 <body class="has-background-light">
-    <div class="columns is-mobile is-centered is-fullheight m-0" style="min-height: 100vh; height: 100vh;">
+    <div class="columns is-mobile is-centered m-0" style="min-height: calc(100vh - 60px); padding-bottom: 60px;">
         <div class="column is-2 has-background-light py-4 px-4">
         <div class="block">
                 <button id="auth-button" class="button is-info" onclick="window.showLoginModal()">Login</button>
@@ -52,7 +52,7 @@
                     <i class="material-icons">add</i>
                 </span>
             </button>
-            <div id="bills-list"></div>
+            <div id="bills-list" style="margin-bottom: 60px;"></div>
         </div>
         <div class="column is-2 has-background-white py-4 px-4">
             <h2 class="title is-5">Calendar</h2>
@@ -64,8 +64,8 @@
     </div>
 
 <!-- Footer -->
-<footer style="position: fixed; bottom: 0; left: 0; right: 0; background: #f8f9fa; padding: 5px 10px; border-top: 1px solid #dee2e6; text-align: center; font-size: 12px; color: #6c757d;">
-        Bills Bills Bills v1.3.9 - Licensed under MIT
+<footer style="position: fixed; bottom: 0; left: 0; right: 0; background: #f8f9fa; padding: 8px 10px; border-top: 1px solid #dee2e6; text-align: center; font-size: 12px; color: #6c757d; z-index: 100; height: 40px;">
+        Bills Bills Bills v1.4.0 - Licensed under MIT
     </footer>
 
     <!-- Modal for editing/adding bill -->
@@ -76,6 +76,7 @@
                 <button class="delete" aria-label="close" onclick="window.closeModal()"></button>
             </header>
             <section class="modal-card-body">
+                <!-- First Row: Name and Amount -->
                 <div class="columns">
                     <div class="column">
                         <div class="field">
@@ -106,6 +107,12 @@
                                 </label>
                             </div>
                         </div>
+                    </div>
+                </div>
+                
+                <!-- Second Row: Icon and Frequency -->
+                <div class="columns">
+                    <div class="column">
                         <div class="field">
                             <label class="label">Icon</label>
                             <div class="control has-icons-left">
@@ -118,27 +125,91 @@
                             </div>
                         </div>
                     </div>
-                </div>
-                <div class="columns">
                     <div class="column">
                         <div class="field">
                             <label class="label">Frequency</label>
                             <div class="control">
                                 <div class="select is-fullwidth">
-                                    <select id="bill-frequency">
+                                    <select id="bill-frequency" onchange="window.updateFrequencyOptions()">
+                                        <option value="weekly">Weekly</option>
+                                        <option value="bi-weekly">Bi-weekly</option>
                                         <option value="monthly">Monthly</option>
                                         <option value="quarterly">Quarterly</option>
                                         <option value="yearly">Yearly</option>
+                                        <option value="custom">Custom</option>
                                     </select>
                                 </div>
                             </div>
                         </div>
                     </div>
+                </div>
+                
+                <!-- Frequency Options -->
+                <div id="frequency-options" style="display: none;">
+                    <!-- Monthly specific dates -->
+                    <div id="monthly-options" style="display: none;">
+                        <div class="field">
+                            <label class="label">Monthly Schedule</label>
+                            <div class="control">
+                                <label class="radio">
+                                    <input type="radio" name="monthly-type" value="same-day" checked onchange="window.updateDatePickerState()">
+                                    Same day each month
+                                </label>
+                            </div>
+                            <div class="control">
+                                <label class="radio">
+                                    <input type="radio" name="monthly-type" value="specific-dates" onchange="window.updateDatePickerState()">
+                                    Specific dates (e.g., 1st & 15th)
+                                </label>
+                            </div>
+                        </div>
+                        <div id="specific-dates-input" style="display: none;">
+                            <div class="field">
+                                <label class="label">Dates (comma-separated, e.g., 1,15)</label>
+                                <div class="control">
+                                    <input class="input" type="text" id="monthly-dates" placeholder="1,15">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Custom multiple weekly -->
+                    <div id="custom-options" style="display: none;">
+                        <div class="field">
+                            <label class="label">Custom Schedule</label>
+                            <div class="control">
+                                <label class="radio">
+                                    <input type="radio" name="custom-type" value="multiple-weekly" checked>
+                                    Multiple times per week
+                                </label>
+                            </div>
+                        </div>
+                        <div id="weekly-days-input">
+                            <div class="field">
+                                <label class="label">Days of Week</label>
+                                <div class="control">
+                                    <label class="checkbox"><input type="checkbox" value="0"> Monday</label>
+                                    <label class="checkbox"><input type="checkbox" value="1"> Tuesday</label>
+                                    <label class="checkbox"><input type="checkbox" value="2"> Wednesday</label>
+                                    <label class="checkbox"><input type="checkbox" value="3"> Thursday</label>
+                                    <label class="checkbox"><input type="checkbox" value="4"> Friday</label>
+                                    <label class="checkbox"><input type="checkbox" value="5"> Saturday</label>
+                                    <label class="checkbox"><input type="checkbox" value="6"> Sunday</label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="columns">
                     <div class="column">
                         <div class="field">
                             <label class="label">Due Date</label>
                             <div class="control">
                                 <input class="input" type="date" id="bill-due">
+                                <p class="help" id="due-date-help" style="display: none;">
+                                    Due date is not needed when using specific dates (e.g., 1st & 15th)
+                                </p>
                             </div>
                         </div>
                     </div>
@@ -550,6 +621,33 @@
                 });
         }
 
+        window.getFrequencyDisplayText = function(bill) {
+            const frequency = bill.frequency;
+            const frequencyType = bill.frequency_type || 'simple';
+            const frequencyConfig = bill.frequency_config ? JSON.parse(bill.frequency_config) : {};
+            
+            if (frequency === 'weekly') return 'Weekly';
+            if (frequency === 'bi-weekly') return 'Bi-weekly';
+            if (frequency === 'quarterly') return 'Quarterly';
+            if (frequency === 'yearly') return 'Yearly';
+            
+            if (frequency === 'monthly') {
+                if (frequencyType === 'specific_dates' && frequencyConfig.dates) {
+                    const dates = frequencyConfig.dates.join(', ');
+                    return `Monthly (${dates}${frequencyConfig.dates.length === 1 ? 'st' : ''})`;
+                }
+                return 'Monthly';
+            }
+            
+            if (frequency === 'custom' && frequencyType === 'multiple_weekly' && frequencyConfig.days) {
+                const dayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+                const days = frequencyConfig.days.map(d => dayNames[d]).join(', ');
+                return `Weekly (${days})`;
+            }
+            
+            return frequency.charAt(0).toUpperCase() + frequency.slice(1);
+        }
+
         window.renderBills = function(bills) {
             const list = document.getElementById('bills-list');
             list.innerHTML = `
@@ -567,9 +665,10 @@
                 item.style.cursor = 'pointer';
                 item.onclick = () => window.showPaymentHistory(bill.name);
                 const amountText = bill.amount ? '$' + bill.amount.toFixed(2) : (bill.varies ? 'Varies ($' + (bill.avg_amount || 0).toFixed(2) + ')' : '');
+                const frequencyText = window.getFrequencyDisplayText(bill);
                 item.innerHTML = `
                     <span class="material-icons bill-icon">${bill.icon || 'payment'}</span>
-                    <span class="bill-name">${bill.name}</span>
+                    <span class="bill-name">${bill.name}<br><small style="color: #666;">${frequencyText}</small></span>
                     <span class="bill-amount">${amountText}</span>
                     <span class="bill-date">${bill.next_due}</span>
                     <span class="bill-actions">
@@ -627,6 +726,50 @@
             document.getElementById('next-30').textContent = countInRange(today, end30);
         }
 
+        window.updateFrequencyOptions = function() {
+            const frequency = document.getElementById('bill-frequency').value;
+            const frequencyOptions = document.getElementById('frequency-options');
+            const monthlyOptions = document.getElementById('monthly-options');
+            const customOptions = document.getElementById('custom-options');
+            
+            // Hide all options first
+            frequencyOptions.style.display = 'none';
+            monthlyOptions.style.display = 'none';
+            customOptions.style.display = 'none';
+            
+            if (frequency === 'monthly') {
+                frequencyOptions.style.display = 'block';
+                monthlyOptions.style.display = 'block';
+            } else if (frequency === 'custom') {
+                frequencyOptions.style.display = 'block';
+                customOptions.style.display = 'block';
+            }
+            
+            // Update date picker state
+            window.updateDatePickerState();
+        }
+
+        window.updateDatePickerState = function() {
+            const frequency = document.getElementById('bill-frequency').value;
+            const monthlyType = document.querySelector('input[name="monthly-type"]:checked');
+            const dueDateInput = document.getElementById('bill-due');
+            const dueDateHelp = document.getElementById('due-date-help');
+            
+            if (frequency === 'monthly' && monthlyType && monthlyType.value === 'specific-dates') {
+                // Disable date picker for specific dates
+                dueDateInput.disabled = true;
+                dueDateInput.required = false;
+                dueDateInput.style.opacity = '0.5';
+                dueDateHelp.style.display = 'block';
+            } else {
+                // Enable date picker for all other cases
+                dueDateInput.disabled = false;
+                dueDateInput.required = true;
+                dueDateInput.style.opacity = '1';
+                dueDateHelp.style.display = 'none';
+            }
+        }
+
         window.addBillModal = function() {
             // Check if logged in first
             if (!window.isLoggedIn) {
@@ -639,8 +782,23 @@
             document.getElementById('bill-name').value = '';
             document.getElementById('bill-amount').value = '';
             document.getElementById('bill-icon').value = 'payment';
+            document.getElementById('bill-frequency').value = 'monthly';
             document.getElementById('bill-due').value = '';
             document.getElementById('bill-auto').checked = false;
+            document.getElementById('bill-varies').checked = false;
+            
+            // Reset frequency options
+            document.querySelector('input[name="monthly-type"][value="same-day"]').checked = true;
+            document.querySelector('input[name="custom-type"][value="multiple-weekly"]').checked = true;
+            document.getElementById('monthly-dates').value = '';
+            document.querySelectorAll('#weekly-days-input input[type="checkbox"]').forEach(cb => cb.checked = false);
+            
+            // Reset amount field state
+            const amountInput = document.getElementById('bill-amount');
+            amountInput.disabled = false;
+            amountInput.style.opacity = '1';
+            
+            window.updateFrequencyOptions();
             window.editingId = null;
         }
 
@@ -682,18 +840,55 @@
             const name = document.getElementById('bill-name').value.trim();
             const dueDate = document.getElementById('bill-due').value;
             const varies = document.getElementById('bill-varies').checked;
+            const frequency = document.getElementById('bill-frequency').value;
+            const dueDateRequired = !document.getElementById('bill-due').disabled;
 
-            if (!name || !dueDate) {
+            if (!name || (dueDateRequired && !dueDate)) {
                 alert('Please fill in all required fields');
                 return;
+            }
+
+            // Build frequency configuration
+            let frequencyType = 'simple';
+            let frequencyConfig = {};
+
+            if (frequency === 'monthly') {
+                const monthlyType = document.querySelector('input[name="monthly-type"]:checked').value;
+                if (monthlyType === 'specific-dates') {
+                    frequencyType = 'specific_dates';
+                    const datesStr = document.getElementById('monthly-dates').value.trim();
+                    if (datesStr) {
+                        const dates = datesStr.split(',').map(d => parseInt(d.trim())).filter(d => d >= 1 && d <= 31);
+                        if (dates.length > 0) {
+                            frequencyConfig.dates = dates.sort((a, b) => a - b);
+                        }
+                    }
+                }
+            } else if (frequency === 'custom') {
+                const customType = document.querySelector('input[name="custom-type"]:checked').value;
+                if (customType === 'multiple-weekly') {
+                    frequencyType = 'multiple_weekly';
+                    const selectedDays = [];
+                    document.querySelectorAll('#weekly-days-input input[type="checkbox"]:checked').forEach(cb => {
+                        selectedDays.push(parseInt(cb.value));
+                    });
+                    if (selectedDays.length > 0) {
+                        frequencyConfig.days = selectedDays.sort((a, b) => a - b);
+                    } else {
+                        alert('Please select at least one day for custom weekly schedule');
+                        return;
+                    }
+                }
             }
 
             const data = {
                 name: name,
                 amount: varies ? null : parseFloat(document.getElementById('bill-amount').value),
                 varies: varies,
-                frequency: document.getElementById('bill-frequency').value,
-                next_due: dueDate,
+                frequency: frequency,
+                frequency_type: frequencyType,
+                frequency_config: frequencyConfig,
+                next_due: dueDate || new Date().toISOString().split('T')[0], // Use today if no date specified
                 auto_payment: document.getElementById('bill-auto').checked,
                 icon: document.getElementById('bill-icon').value.trim() || 'payment'
             };
@@ -743,9 +938,30 @@
                     document.getElementById('bill-due').value = bill.next_due;
                     document.getElementById('bill-auto').checked = bill.auto_payment;
                     document.getElementById('bill-varies').checked = bill.varies || false;
+                    
                     const input = document.getElementById('bill-amount');
                     input.disabled = bill.varies || false;
                     input.style.opacity = (bill.varies || false) ? '0.5' : '1';
+                    
+                    // Handle frequency configuration
+                    const frequencyType = bill.frequency_type || 'simple';
+                    const frequencyConfig = bill.frequency_config ? JSON.parse(bill.frequency_config) : {};
+                    
+                    // Reset radio buttons first
+                    document.querySelector('input[name="monthly-type"][value="same-day"]').checked = true;
+                    document.querySelector('input[name="custom-type"][value="multiple-weekly"]').checked = true;
+                    
+                    if (bill.frequency === 'monthly' && frequencyType === 'specific_dates' && frequencyConfig.dates) {
+                        document.querySelector('input[name="monthly-type"][value="specific-dates"]').checked = true;
+                        document.getElementById('monthly-dates').value = frequencyConfig.dates.join(',');
+                    } else if (bill.frequency === 'custom' && frequencyType === 'multiple_weekly' && frequencyConfig.days) {
+                        document.querySelector('input[name="custom-type"][value="multiple-weekly"]').checked = true;
+                        document.querySelectorAll('#weekly-days-input input[type="checkbox"]').forEach(cb => {
+                            cb.checked = frequencyConfig.days.includes(parseInt(cb.value));
+                        });
+                    }
+                    
+                    window.updateFrequencyOptions();
                     window.editingId = id;
                 }
             });
@@ -1285,7 +1501,49 @@ window.changePassword = function() {
         // Load bills on start and set up events
         document.addEventListener('DOMContentLoaded', () => {
             window.checkLoginStatus();
-            const commonIcons = ['payment', 'credit_card', 'account_balance', 'account_balance_wallet', 'home', 'car', 'phone', 'wifi', 'shopping_cart', 'restaurant', 'local_gas_station', 'lightbulb', 'school', 'medical_services', 'fitness_center', 'movie', 'music_note', 'flight', 'train', 'bus', 'directions_car', 'local_shipping', 'work', 'business', 'store', 'local_drink', 'movie_creation', 'camera', 'palette', 'sports_soccer', 'golf_course', 'pool', 'beach_access', 'camping', 'access_time', 'alarm', 'event', 'cake', 'gift', 'shopping_bag', 'local_offer', 'loyalty', 'star', 'grade', 'thumb_up'];
+            const commonIcons = [
+                // Payment & Finance
+                'payment', 'credit_card', 'account_balance', 'account_balance_wallet', 'attach_money', 'monetization_on', 'savings', 'currency_exchange',
+                
+                // Utilities & Home
+                'home', 'lightbulb', 'power', 'electrical_services', 'water_drop', 'local_fire_department', 'ac_unit', 'thermostat', 'wifi', 'router', 'cable', 'satellite',
+                
+                // Transportation
+                'directions_car', 'local_gas_station', 'car_repair', 'train', 'bus', 'flight', 'local_shipping', 'motorcycle', 'pedal_bike', 'taxi', 'uber', 'local_parking',
+                
+                // Shopping & Stores
+                'shopping_cart', 'shopping_bag', 'store', 'local_grocery_store', 'local_mall', 'storefront', 'local_offer', 'loyalty', 'receipt', 'shopping_basket',
+                
+                // Food & Dining
+                'restaurant', 'local_dining', 'local_pizza', 'local_cafe', 'local_bar', 'fastfood', 'bakery_dining', 'ramen_dining', 'local_drink', 'coffee',
+                
+                // Healthcare & Wellness
+                'medical_services', 'local_hospital', 'local_pharmacy', 'fitness_center', 'spa', 'psychology', 'healing', 'vaccines', 'medication',
+                
+                // Entertainment & Media
+                'movie', 'theaters', 'music_note', 'headphones', 'tv', 'videogame_asset', 'sports_esports', 'casino', 'nightlife', 'celebration',
+                
+                // Technology & Communication
+                'phone', 'smartphone', 'computer', 'laptop', 'tablet', 'watch', 'headset', 'memory', 'cloud', 'wifi_tethering',
+                
+                // Education & Work
+                'school', 'work', 'business', 'corporate_fare', 'apartment', 'domain', 'meeting_room', 'co_present', 'library_books', 'science',
+                
+                // Sports & Recreation
+                'sports_soccer', 'sports_basketball', 'sports_tennis', 'golf_course', 'pool', 'beach_access', 'camping', 'hiking', 'kayaking', 'skiing_downhill',
+                
+                // Personal Care & Services
+                'content_cut', 'spa', 'dry_cleaning', 'local_laundry_service', 'cleaning_services', 'handyman', 'plumbing', 'construction',
+                
+                // Insurance & Legal
+                'security', 'gavel', 'balance', 'verified_user', 'policy', 'shield', 'lock', 'key',
+                
+                // Subscriptions & Memberships
+                'subscriptions', 'card_membership', 'stars', 'workspace_premium', 'diamond', 'auto_awesome',
+                
+                // Miscellaneous
+                'pets', 'child_care', 'elderly', 'volunteer_activism', 'favorite', 'cake', 'gift', 'event', 'calendar_today', 'schedule'
+            ];
             const datalist = document.getElementById('icon-list');
             commonIcons.forEach(icon => {
                 const option = document.createElement('option');
@@ -1300,6 +1558,15 @@ window.changePassword = function() {
             document.getElementById('bill-icon').addEventListener('input', function() {
                 const icon = this.value.trim() || 'payment';
                 document.getElementById('icon-preview').innerHTML = `<i class="material-icons">${icon}</i>`;
+            });
+            
+            // Add event listeners for frequency options
+            document.querySelectorAll('input[name="monthly-type"]').forEach(radio => {
+                radio.addEventListener('change', function() {
+                    const specificDatesInput = document.getElementById('specific-dates-input');
+                    specificDatesInput.style.display = this.value === 'specific-dates' ? 'block' : 'none';
+                    window.updateDatePickerState();
+                });
             });
         });
 

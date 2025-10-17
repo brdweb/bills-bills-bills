@@ -6,9 +6,11 @@ A **secure multi-user** web application for tracking recurring monthly expenses 
 
 - **🔐 Secure Access**: Forced password change for default admin accounts
 - **👥 Multi-Database**: Complete data isolation between user groups
-- **📊 Track Expenses**: Monthly, quarterly, or yearly recurring bills
+- **📊 Enhanced Frequencies**: Weekly, bi-weekly, monthly, quarterly, yearly, and custom schedules
+- **📅 Flexible Scheduling**: Support for specific dates (1st & 15th), multiple times per week with day picker
 - **💰 Payment Logging**: Record payments with automatic bill cycling
 - **📚 Payment History**: Full history with edit/delete capabilities
+- **🔄 Auto-Migrations**: Automated database updates preserve data during upgrades
 - **👨‍💼 Admin Controls**: User and database management
 - **🎨 Custom Icons**: 44+ Material Design icons
 - **📱 Responsive**: Works on desktop, tablet, and mobile
