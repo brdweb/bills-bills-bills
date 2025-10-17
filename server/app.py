@@ -6,6 +6,7 @@ import os
 import hashlib
 import secrets
 import json
+import calendar
 from flask_cors import CORS
 from datetime import date, timedelta
 from functools import wraps
@@ -159,7 +160,9 @@ if master_needs_init or personal_needs_init:
                 name TEXT NOT NULL,
                 amount DECIMAL(10,2),
                 varies BOOLEAN DEFAULT FALSE,
-                frequency TEXT CHECK(frequency IN ('monthly', 'quarterly', 'yearly')) DEFAULT 'monthly',
+                frequency TEXT CHECK(frequency IN ('monthly', 'quarterly', 'yearly', 'bi-weekly', 'weekly', 'custom')) DEFAULT 'monthly',
+                frequency_type TEXT DEFAULT 'simple',
+                frequency_config TEXT DEFAULT '{}',
                 next_due DATE NOT NULL,
                 auto_payment BOOLEAN DEFAULT FALSE,
                 paid BOOLEAN DEFAULT FALSE,
@@ -276,14 +279,137 @@ def get_db(db_name=None):
 
     return db
 
+def calculate_next_due_date(current_due, frequency, frequency_type='simple', frequency_config=None):
+    """Calculate the next due date based on frequency settings"""
+    if frequency_config is None:
+        frequency_config = {}
+    
+    current_date = datetime.date.fromisoformat(current_due) if isinstance(current_due, str) else current_due
+    
+    if frequency == 'weekly':
+        return current_date + timedelta(days=7)
+    
+    elif frequency == 'bi-weekly':
+        return current_date + timedelta(days=14)
+    
+    elif frequency == 'monthly':
+        if frequency_type == 'specific_dates' and 'dates' in frequency_config:
+            # Handle 1st & 15th or other specific monthly dates
+            dates = frequency_config['dates']  # e.g., [1, 15]
+            current_day = current_date.day
+            
+            # Find next date in the same month
+            next_dates = [d for d in dates if d > current_day]
+            if next_dates:
+                # Next date is in the same month
+                next_day = min(next_dates)
+                try:
+                    return current_date.replace(day=next_day)
+                except ValueError:
+                    # Day doesn't exist in current month, go to next month
+                    pass
+            
+            # Go to next month, use first date
+            next_month = current_date.month + 1
+            next_year = current_date.year
+            if next_month > 12:
+                next_month = 1
+                next_year += 1
+            
+            next_day = min(dates)
+            # Handle months with fewer days
+            max_day = calendar.monthrange(next_year, next_month)[1]
+            next_day = min(next_day, max_day)
+            
+            return datetime.date(next_year, next_month, next_day)
+        else:
+            # Standard monthly - same day next month
+            month = current_date.month + 1
+            year = current_date.year
+            if month > 12:
+                month = 1
+                year += 1
+            day = min(current_date.day, calendar.monthrange(year, month)[1])
+            return datetime.date(year, month, day)
+    
+    elif frequency == 'quarterly':
+        month = current_date.month + 3
+        year = current_date.year
+        if month > 12:
+            month -= 12
+            year += 1
+        day = min(current_date.day, calendar.monthrange(year, month)[1])
+        return datetime.date(year, month, day)
+    
+    elif frequency == 'yearly':
+        try:
+            return current_date.replace(year=current_date.year + 1)
+        except ValueError:
+            # Handle leap year edge case (Feb 29)
+            return current_date.replace(year=current_date.year + 1, day=28)
+    
+    elif frequency == 'custom' and frequency_type == 'multiple_weekly':
+        # Multiple times per week
+        days_of_week = frequency_config.get('days', [])  # e.g., [1, 3, 5] for Mon, Wed, Fri
+        if not days_of_week:
+            return current_date + timedelta(days=7)  # Fallback to weekly
+        
+        current_weekday = current_date.weekday()  # 0=Monday, 6=Sunday
+        
+        # Find next occurrence
+        next_days = [d for d in days_of_week if d > current_weekday]
+        if next_days:
+            # Next occurrence is this week
+            days_ahead = min(next_days) - current_weekday
+            return current_date + timedelta(days=days_ahead)
+        else:
+            # Next occurrence is next week
+            days_ahead = 7 - current_weekday + min(days_of_week)
+            return current_date + timedelta(days=days_ahead)
+    
+    # Fallback to monthly
+    return current_date + timedelta(days=30)
+
 def apply_database_migrations(db):
     """Apply database schema migrations"""
+    # Migration 1: Add icon column
     try:
         db.execute("ALTER TABLE bills ADD COLUMN icon TEXT DEFAULT 'payment'")
         print("Added icon column to bills table")
         db.commit()
     except sqlite3.OperationalError:
         # Column likely already exists, ignore
+        pass
+    
+    # Migration 2: Add enhanced frequency support
+    try:
+        db.execute("ALTER TABLE bills ADD COLUMN frequency_type TEXT DEFAULT 'simple'")
+        db.execute("ALTER TABLE bills ADD COLUMN frequency_config TEXT DEFAULT '{}'")
+        print("Added enhanced frequency columns to bills table")
+        db.commit()
+    except sqlite3.OperationalError:
+        # Columns likely already exist, ignore
+        pass
+    
+    # Migration 3: Create schema_version table for tracking migrations
+    try:
+        db.execute('''CREATE TABLE IF NOT EXISTS schema_version (
+            version INTEGER PRIMARY KEY,
+            applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            description TEXT
+        )''')
+        
+        # Check current version
+        current_version = db.execute('SELECT MAX(version) FROM schema_version').fetchone()[0]
+        if current_version is None:
+            # First time setup - mark as version 3 (current)
+            db.execute('INSERT INTO schema_version (version, description) VALUES (?, ?)', 
+                      (3, 'Enhanced frequency support and migration tracking'))
+            print("Initialized schema version tracking at version 3")
+        
+        db.commit()
+    except sqlite3.OperationalError as e:
+        print(f"Migration error: {e}")
         pass
 
 @app.before_request
@@ -312,12 +438,15 @@ def add_bill():
         amount = data.get('amount') if not data.get('varies', False) else None
         varies = data.get('varies', False)
         frequency = data.get('frequency', 'monthly')
+        frequency_type = data.get('frequency_type', 'simple')
+        frequency_config = json.dumps(data.get('frequency_config', {}))
         next_due = data.get('next_due')
         auto_payment = data.get('auto_payment', False)
-        db = get_db()
         icon = data.get('icon', 'payment')
-        db.execute('INSERT INTO bills (name, amount, varies, frequency, next_due, auto_payment, icon) VALUES (?, ?, ?, ?, ?, ?, ?)',
-                   (name, amount, varies, frequency, next_due, auto_payment, icon))
+        
+        db = get_db()
+        db.execute('INSERT INTO bills (name, amount, varies, frequency, frequency_type, frequency_config, next_due, auto_payment, icon) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+                   (name, amount, varies, frequency, frequency_type, frequency_config, next_due, auto_payment, icon))
         db.commit()
         return jsonify({'message': 'Bill added'}), 201
     except Exception as e:
@@ -332,16 +461,21 @@ def update_bill(id):
         name = data.get('name')
         amount = data.get('amount')
         frequency = data.get('frequency')
+        frequency_type = data.get('frequency_type')
+        frequency_config = data.get('frequency_config')
         next_due = data.get('next_due')
         auto_payment = data.get('auto_payment')
         varies = data.get('varies')
         icon = data.get('icon')
+        
         db = get_db()
         fields = []
         values = []
         if name is not None: fields.append('name = ?'); values.append(name)
         if amount is not None: fields.append('amount = ?'); values.append(amount)
         if frequency is not None: fields.append('frequency = ?'); values.append(frequency)
+        if frequency_type is not None: fields.append('frequency_type = ?'); values.append(frequency_type)
+        if frequency_config is not None: fields.append('frequency_config = ?'); values.append(json.dumps(frequency_config))
         if next_due is not None: fields.append('next_due = ?'); values.append(next_due)
         if auto_payment is not None: fields.append('auto_payment = ?'); values.append(auto_payment)
         if varies is not None: fields.append('varies = ?'); values.append(varies)
@@ -383,30 +517,20 @@ def pay_bill(id):
         # Archive current
         db.execute('UPDATE bills SET archived = 1 WHERE id = ?', (id,))
 
-        # Calculate next due
-        next_due_date = datetime.date.fromisoformat(bill['next_due'])
-        freq = bill['frequency']
-        if freq == 'monthly':
-            month = next_due_date.month + 1
-            year = next_due_date.year
-            if month > 12:
-                month = 1
-                year += 1
-            day = min(next_due_date.day, 28)
-            next_due_date = datetime.date(year, month, day)
-        elif freq == 'quarterly':
-            month = next_due_date.month + 3
-            year = next_due_date.year
-            if month > 12:
-                month -= 12
-                year += 1
-            next_due_date = datetime.date(year, month, next_due_date.day)
-        elif freq == 'yearly':
-            next_due_date = datetime.date(next_due_date.year + 1, next_due_date.month, next_due_date.day)
+        # Calculate next due date using enhanced logic
+        frequency_config = json.loads(bill.get('frequency_config', '{}'))
+        next_due_date = calculate_next_due_date(
+            bill['next_due'], 
+            bill['frequency'], 
+            bill.get('frequency_type', 'simple'),
+            frequency_config
+        )
 
-        # Add new bill
-        db.execute('INSERT INTO bills (name, amount, varies, frequency, next_due, auto_payment, icon) VALUES (?, ?, ?, ?, ?, ?, ?)',
-                   (bill['name'], bill['amount'], bill['varies'], bill['frequency'], next_due_date.isoformat(), bill['auto_payment'], bill['icon']))
+        # Add new bill with same configuration
+        db.execute('INSERT INTO bills (name, amount, varies, frequency, frequency_type, frequency_config, next_due, auto_payment, icon) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+                   (bill['name'], bill['amount'], bill['varies'], bill['frequency'], 
+                    bill.get('frequency_type', 'simple'), bill.get('frequency_config', '{}'),
+                    next_due_date.isoformat(), bill['auto_payment'], bill['icon']))
     db.commit()
     return jsonify({'message': 'Payment recorded' + ( ' and recurring added' if advance_due else '')}), 200
 
@@ -626,7 +750,9 @@ def create_database():
             name TEXT NOT NULL,
             amount DECIMAL(10,2),
             varies BOOLEAN DEFAULT FALSE,
-            frequency TEXT CHECK(frequency IN ('monthly', 'quarterly', 'yearly')) DEFAULT 'monthly',
+            frequency TEXT CHECK(frequency IN ('monthly', 'quarterly', 'yearly', 'bi-weekly', 'weekly', 'custom')) DEFAULT 'monthly',
+            frequency_type TEXT DEFAULT 'simple',
+            frequency_config TEXT DEFAULT '{}',
             next_due DATE NOT NULL,
             auto_payment BOOLEAN DEFAULT FALSE,
             paid BOOLEAN DEFAULT FALSE,
@@ -809,7 +935,39 @@ def delete_user(id):
 
 @app.route('/api/version', methods=['GET'])
 def get_version():
-    return jsonify({'version': '1.3.9'})
+    return jsonify({'version': '1.4.0', 'features': ['enhanced_frequencies', 'automated_migrations']})
+
+@app.route('/api/migration-status', methods=['GET'])
+@admin_required
+def get_migration_status():
+    """Get migration status for all databases"""
+    try:
+        master_db = get_master_db()
+        databases = master_db.execute('SELECT name FROM databases').fetchall()
+        
+        status = {}
+        for db_row in databases:
+            db_name = db_row['name']
+            try:
+                db = get_db(db_name)
+                # Check if schema_version table exists
+                tables = db.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='schema_version'").fetchall()
+                if tables:
+                    version = db.execute('SELECT MAX(version) FROM schema_version').fetchone()[0]
+                    migrations = db.execute('SELECT version, description, applied_at FROM schema_version ORDER BY version').fetchall()
+                    status[db_name] = {
+                        'current_version': version,
+                        'migrations': [dict(m) for m in migrations]
+                    }
+                else:
+                    status[db_name] = {'current_version': 'pre-migration', 'migrations': []}
+                db.close()
+            except Exception as e:
+                status[db_name] = {'error': str(e)}
+        
+        return jsonify(status)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/change-password', methods=['POST'])
 def change_password():
