@@ -24,9 +24,9 @@ app = Flask(__name__, static_folder=None)
 app.secret_key = secrets.token_hex(32)  # For session management
 CORS(app)  # Enable CORS for the frontend
 
-# Database configuration - use mounted volumes at /app
-DATABASE_DIR = '/app/dbs'
-MASTER_DB = '/app/data/master.db'
+# Database configuration - use environment variables or Docker defaults
+DATABASE_DIR = os.environ.get('DATABASE_DIR', '/app/dbs')
+MASTER_DB = os.environ.get('MASTER_DB', '/app/data/master.db')
 
 # Force fresh init if environment variable is set
 if os.environ.get('FORCE_FRESH_INIT', 'false').lower() == 'true':
@@ -215,15 +215,28 @@ def login_required(f):
         return f(*args, **kwargs)
     return decorated_function
 
+def get_client_dir():
+    """Get the client directory - dist for production, client for development"""
+    # Check for production build first
+    dist_dir = os.path.join(os.path.dirname(__file__), '..', 'client', 'dist')
+    if os.path.exists(dist_dir) and os.path.isfile(os.path.join(dist_dir, 'index.html')):
+        return dist_dir
+    # Fall back to client directory for development
+    return os.path.join(os.path.dirname(__file__), '..', 'client')
+
 @app.route('/')
 def index():
-    client_dir = os.path.join(os.path.dirname(__file__), '..', 'client')
-    return send_from_directory(client_dir, 'index.html')
+    return send_from_directory(get_client_dir(), 'index.html')
 
 @app.route('/<path:path>')
 def serve_static(path):
-    client_dir = os.path.join(os.path.dirname(__file__), '..', 'client')
-    return send_from_directory(client_dir, path)
+    client_dir = get_client_dir()
+    # Try to serve the exact path first
+    full_path = os.path.join(client_dir, path)
+    if os.path.exists(full_path) and os.path.isfile(full_path):
+        return send_from_directory(client_dir, path)
+    # For SPA routing, serve index.html for non-file paths
+    return send_from_directory(client_dir, 'index.html')
 
 # Ensure directories exist
 os.makedirs(DATABASE_DIR, exist_ok=True)
@@ -263,7 +276,7 @@ def get_db(db_name=None):
     """Get connection to specific user database"""
     if db_name is None:
         if 'db_name' not in session:
-            raise ValueError("No database selected")
+            raise ValueError("No database selected. Please ensure your account has access to at least one database, then log out and log back in.")
         db_name = session['db_name']
 
     # Sanitize db_name to prevent directory traversal
@@ -420,7 +433,18 @@ def create_table():
 @login_required
 def get_bills():
     db = get_db()
-    cur = db.execute("SELECT * FROM bills WHERE archived = 0 ORDER BY next_due")
+    include_archived = request.args.get('include_archived', 'false').lower() == 'true'
+    if include_archived:
+        # Get only the most recent entry per bill name (highest id = most recent)
+        cur = db.execute("""
+            SELECT b.* FROM bills b
+            INNER JOIN (
+                SELECT name, MAX(id) as max_id FROM bills GROUP BY name
+            ) latest ON b.id = latest.max_id
+            ORDER BY b.archived, b.next_due
+        """)
+    else:
+        cur = db.execute("SELECT * FROM bills WHERE archived = 0 ORDER BY next_due")
     bills = [dict(bill) for bill in cur.fetchall()]
     for bill in bills:
         if bill['varies']:
@@ -491,11 +515,44 @@ def update_bill(id):
 
 @app.route('/bills/<int:id>', methods=['DELETE'])
 @login_required
-def delete_bill(id):
+def archive_bill(id):
     db = get_db()
     db.execute('UPDATE bills SET archived = 1 WHERE id = ?', (id,))
-    db.commit()  # Archive instead of delete
+    db.commit()
     return jsonify({'message': 'Bill archived'})
+
+@app.route('/bills/<int:id>/unarchive', methods=['POST'])
+@login_required
+def unarchive_bill(id):
+    db = get_db()
+    db.execute('UPDATE bills SET archived = 0 WHERE id = ?', (id,))
+    db.commit()
+    return jsonify({'message': 'Bill unarchived'})
+
+@app.route('/bills/<int:id>/permanent', methods=['DELETE'])
+@login_required
+def delete_bill_permanent(id):
+    """Permanently delete a bill and all its payment history"""
+    db = get_db()
+    # Get the bill name first for deleting all related bills
+    bill = db.execute('SELECT name FROM bills WHERE id = ?', (id,)).fetchone()
+    if not bill:
+        return jsonify({'error': 'Bill not found'}), 404
+
+    bill_name = bill['name']
+
+    # Get all bill IDs with this name (for deleting payments)
+    bill_ids = db.execute('SELECT id FROM bills WHERE name = ?', (bill_name,)).fetchall()
+
+    # Delete all payments for these bill IDs
+    for b in bill_ids:
+        db.execute('DELETE FROM payments WHERE bill_id = ?', (b['id'],))
+
+    # Delete all bill instances with this name (including archived ones)
+    db.execute('DELETE FROM bills WHERE name = ?', (bill_name,))
+
+    db.commit()
+    return jsonify({'message': 'Bill and payment history permanently deleted'})
 
 @app.route('/bills/<int:id>/pay', methods=['POST'])
 @login_required
@@ -591,6 +648,38 @@ def delete_payment(id):
     db.commit()
     return jsonify({'message': 'Payment deleted'})
 
+@app.route('/api/payments/monthly', methods=['GET'])
+@login_required
+def get_monthly_payments():
+    """Get payment totals grouped by month"""
+    try:
+        db = get_db()
+        # Get all payments with their dates, grouped by year-month
+        cur = db.execute("""
+            SELECT
+                strftime('%Y', payment_date) as year,
+                strftime('%m', payment_date) as month,
+                SUM(amount) as total
+            FROM payments
+            GROUP BY strftime('%Y-%m', payment_date)
+            ORDER BY year DESC, month DESC
+        """)
+        results = cur.fetchall()
+
+        # Convert to dict keyed by "YYYY-MM"
+        monthly_totals = {}
+        for row in results:
+            key = f"{row['year']}-{row['month']}"
+            monthly_totals[key] = row['total']
+
+        db.close()
+        return jsonify(monthly_totals)
+    except Exception as e:
+        print(f"Error in get_monthly_payments: {e}")
+        if 'db' in locals():
+            db.close()
+        return jsonify({'error': str(e)}), 500
+
 @app.route('/debug-db')
 def debug_db():
     """Debug route to check database contents"""
@@ -679,7 +768,10 @@ def login():
                 # Set default database (first available database)
                 if accessible_dbs:
                     session['db_name'] = accessible_dbs[0]['name']
-                
+                else:
+                    # Warn if user has no database access
+                    response['warning'] = 'Your account has no database access. Please contact an administrator to grant you access to a database.'
+
                 response['databases'] = [dict(db) for db in accessible_dbs]
 
             return jsonify(response), 200

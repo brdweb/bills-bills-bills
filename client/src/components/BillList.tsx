@@ -1,0 +1,293 @@
+import {
+  Table,
+  Group,
+  Text,
+  Badge,
+  ActionIcon,
+  Paper,
+  Title,
+  Button,
+  Stack,
+  Card,
+  TextInput,
+} from '@mantine/core';
+import { IconEdit, IconCash, IconPlus, IconFilterOff, IconSearch, IconX } from '@tabler/icons-react';
+import type { Bill } from '../api/client';
+import { BillIcon } from './BillIcon';
+
+interface BillListProps {
+  bills: Bill[];
+  onEdit: (bill: Bill) => void;
+  onPay: (bill: Bill) => void;
+  onAdd: () => void;
+  onViewPayments: (bill: Bill) => void;
+  isLoggedIn: boolean;
+  hasDatabase: boolean;
+  hasActiveFilter?: boolean;
+  onClearFilter?: () => void;
+  searchQuery?: string;
+  onSearchChange?: (query: string) => void;
+}
+
+function getFrequencyText(bill: Bill): string {
+  const frequencyConfig = bill.frequency_config ? JSON.parse(bill.frequency_config) : {};
+
+  switch (bill.frequency) {
+    case 'weekly':
+      return 'Weekly';
+    case 'bi-weekly':
+      return 'Bi-weekly';
+    case 'quarterly':
+      return 'Quarterly';
+    case 'yearly':
+      return 'Yearly';
+    case 'monthly':
+      if (bill.frequency_type === 'specific_dates' && frequencyConfig.dates) {
+        const dates = frequencyConfig.dates.join(', ');
+        return `Monthly (${dates}${frequencyConfig.dates.length === 1 ? 'st/nd/rd/th' : ''})`;
+      }
+      return 'Monthly';
+    case 'custom':
+      if (bill.frequency_type === 'multiple_weekly' && frequencyConfig.days) {
+        const dayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+        const days = frequencyConfig.days.map((d: number) => dayNames[d]).join(', ');
+        return `Weekly (${days})`;
+      }
+      return 'Custom';
+    default:
+      return bill.frequency;
+  }
+}
+
+// Parse date string directly to avoid timezone issues
+function parseDate(dateStr: string): Date {
+  const [year, month, day] = dateStr.split('-').map(Number);
+  return new Date(year, month - 1, day);
+}
+
+function formatDate(dateStr: string): string {
+  const date = parseDate(dateStr);
+  return date.toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  });
+}
+
+function getDueBadgeColor(dateStr: string): string {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const dueDate = parseDate(dateStr);
+  dueDate.setHours(0, 0, 0, 0);
+
+  const diffDays = Math.ceil((dueDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+
+  if (diffDays < 0) return 'red';
+  if (diffDays === 0) return 'red';
+  if (diffDays <= 3) return 'orange';
+  if (diffDays <= 7) return 'yellow';
+  return 'gray';
+}
+
+export function BillList({
+  bills,
+  onEdit,
+  onPay,
+  onAdd,
+  onViewPayments,
+  isLoggedIn,
+  hasDatabase,
+  hasActiveFilter,
+  onClearFilter,
+  searchQuery = '',
+  onSearchChange,
+}: BillListProps) {
+  if (!isLoggedIn) {
+    return (
+      <Card p="xl" withBorder>
+        <Stack align="center" gap="md">
+          <Text size="lg" c="dimmed">
+            Please log in to view your bills
+          </Text>
+        </Stack>
+      </Card>
+    );
+  }
+
+  if (!hasDatabase) {
+    return (
+      <Card p="xl" withBorder>
+        <Stack align="center" gap="md">
+          <Text size="lg" c="dimmed">
+            No database access
+          </Text>
+          <Text size="sm" c="dimmed" ta="center">
+            Your account does not have access to any databases.
+            Please contact an administrator to grant you access.
+          </Text>
+        </Stack>
+      </Card>
+    );
+  }
+
+  if (bills.length === 0) {
+    // Different messages for filtered vs unfiltered empty state
+    if (hasActiveFilter) {
+      return (
+        <Card p="xl" withBorder>
+          <Stack align="center" gap="md">
+            <Text size="lg" c="dimmed">
+              No bills match your current filter
+            </Text>
+            {onClearFilter && (
+              <Button
+                variant="light"
+                leftSection={<IconFilterOff size={16} />}
+                onClick={onClearFilter}
+              >
+                Clear Filter
+              </Button>
+            )}
+          </Stack>
+        </Card>
+      );
+    }
+
+    return (
+      <Card p="xl" withBorder>
+        <Stack align="center" gap="md">
+          <Text size="lg" c="dimmed">
+            No bills yet. Add your first bill to get started!
+          </Text>
+          <Button leftSection={<IconPlus size={16} />} onClick={onAdd}>
+            Add Bill
+          </Button>
+        </Stack>
+      </Card>
+    );
+  }
+
+  return (
+    <Stack gap="md">
+      <Group justify="space-between">
+        <Title order={4}>Bills</Title>
+        <Group gap="sm">
+          {onSearchChange && (
+            <TextInput
+              placeholder="Search bills..."
+              leftSection={<IconSearch size={16} />}
+              rightSection={
+                searchQuery && (
+                  <ActionIcon
+                    size="sm"
+                    variant="subtle"
+                    onClick={() => onSearchChange('')}
+                  >
+                    <IconX size={14} />
+                  </ActionIcon>
+                )
+              }
+              value={searchQuery}
+              onChange={(e) => onSearchChange(e.currentTarget.value)}
+              size="sm"
+              w={200}
+            />
+          )}
+          <Button leftSection={<IconPlus size={16} />} onClick={onAdd} size="sm">
+            Add Bill
+          </Button>
+        </Group>
+      </Group>
+
+      <Paper withBorder>
+        <Table striped highlightOnHover>
+          <Table.Thead>
+            <Table.Tr>
+              <Table.Th>Name</Table.Th>
+              <Table.Th>Amount</Table.Th>
+              <Table.Th>Due Date</Table.Th>
+              <Table.Th>Frequency</Table.Th>
+              <Table.Th>Actions</Table.Th>
+            </Table.Tr>
+          </Table.Thead>
+          <Table.Tbody>
+            {bills.map((bill) => (
+              <Table.Tr
+                key={bill.id}
+                style={{
+                  cursor: 'pointer',
+                  opacity: bill.archived ? 0.6 : 1,
+                  backgroundColor: bill.archived ? 'var(--mantine-color-gray-light)' : undefined,
+                }}
+                onClick={() => onViewPayments(bill)}
+              >
+                <Table.Td>
+                  <Group gap="sm">
+                    <BillIcon icon={bill.icon} size={24} />
+                    <div>
+                      <Text fw={500}>{bill.name}</Text>
+                      <Group gap={4}>
+                        {!!bill.archived && (
+                          <Badge size="xs" color="gray" variant="filled">
+                            Archived
+                          </Badge>
+                        )}
+                        {!!bill.auto_payment && !bill.archived && (
+                          <Badge size="xs" color="green" variant="light">
+                            Auto-pay
+                          </Badge>
+                        )}
+                      </Group>
+                    </div>
+                  </Group>
+                </Table.Td>
+                <Table.Td>
+                  {bill.varies ? (
+                    <Text c="dimmed">
+                      Varies{' '}
+                      <Text span size="xs">
+                        (~${(bill.avg_amount || 0).toFixed(2)})
+                      </Text>
+                    </Text>
+                  ) : (
+                    <Text fw={500}>${(bill.amount || 0).toFixed(2)}</Text>
+                  )}
+                </Table.Td>
+                <Table.Td>
+                  <Badge color={getDueBadgeColor(bill.next_due)} variant="light">
+                    {formatDate(bill.next_due)}
+                  </Badge>
+                </Table.Td>
+                <Table.Td>
+                  <Text size="sm" c="dimmed">
+                    {getFrequencyText(bill)}
+                  </Text>
+                </Table.Td>
+                <Table.Td>
+                  <Group gap="xs" onClick={(e) => e.stopPropagation()}>
+                    <ActionIcon
+                      variant="subtle"
+                      color="blue"
+                      onClick={() => onEdit(bill)}
+                      title="Edit"
+                    >
+                      <IconEdit size={18} />
+                    </ActionIcon>
+                    <ActionIcon
+                      variant="filled"
+                      color="green"
+                      onClick={() => onPay(bill)}
+                      title="Pay"
+                    >
+                      <IconCash size={18} />
+                    </ActionIcon>
+                  </Group>
+                </Table.Td>
+              </Table.Tr>
+            ))}
+          </Table.Tbody>
+        </Table>
+      </Paper>
+    </Stack>
+  );
+}
