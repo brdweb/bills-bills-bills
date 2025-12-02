@@ -1,21 +1,36 @@
-# 💵 Bills, Bills, Bills! Expense Tracker
+# Bills, Bills, Bills! Expense Tracker
 
-A **secure multi-user** web application for tracking recurring monthly expenses and payments with **complete data separation**. Inspired by Chronicle on MacOS.
+A **secure multi-user** web application for tracking recurring monthly expenses and payments with **complete data separation**. Built with React + Mantine frontend and Flask backend.
 
-## 🎯 Features
+![Bills Bills Bills Screenshot](docs/screenshot.png)
 
-- **🔐 Secure Access**: Forced password change for default admin accounts
-- **👥 Multi-Database**: Complete data isolation between user groups
-- **📊 Enhanced Frequencies**: Weekly, bi-weekly, monthly, quarterly, yearly, and custom schedules
-- **📅 Flexible Scheduling**: Support for specific dates (1st & 15th), multiple times per week with day picker
-- **💰 Payment Logging**: Record payments with automatic bill cycling
-- **📚 Payment History**: Full history with edit/delete capabilities
-- **🔄 Auto-Migrations**: Automated database updates preserve data during upgrades
-- **👨‍💼 Admin Controls**: User and database management
-- **🎨 Custom Icons**: 44+ Material Design icons
-- **📱 Responsive**: Works on desktop, tablet, and mobile
+## Features
 
-## 🚀 Quick Start
+- **Secure Access**: Forced password change for default admin accounts
+- **Multi-Database**: Complete data isolation between user groups
+- **Modern Dashboard**: Monthly expense tracking with payment history carousel
+- **Enhanced Frequencies**: Weekly, bi-weekly, monthly, quarterly, yearly, and custom schedules
+- **Flexible Scheduling**: Support for specific dates (1st & 15th), multiple times per week with day picker
+- **Payment Logging**: Record payments with automatic bill cycling
+- **Payment History**: Full history with edit/delete capabilities, monthly totals carousel for past months
+- **Auto-Payments**: Mark bills for automatic payment processing
+- **Auto-Migrations**: Automated database updates preserve data during upgrades
+- **Admin Controls**: User and database management
+- **Custom Icons**: 70+ icons including sports, finance, utilities, entertainment, and more
+- **Dark/Light Mode**: Toggle between themes with persistence
+- **Responsive**: Works on desktop, tablet, and mobile
+- **Calendar View**: Visual calendar showing upcoming bill due dates
+
+## What's New in v2.0
+
+- **React + Mantine UI**: Complete frontend rewrite with modern component library
+- **Monthly Payment Carousel**: Navigate through previous months to see payment history
+- **Sports Icons**: Added soccer, football, baseball, basketball, tennis, volleyball, golf, trophy
+- **Improved Dashboard**: "This Month" section shows all bills due regardless of frequency
+- **Payment Tracking**: Past months show only actual recorded payments, not just due dates
+- **Dark Mode**: System-aware dark/light theme toggle
+
+## Quick Start
 
 ### Prerequisites
 - Docker installed and running
@@ -49,39 +64,45 @@ A **secure multi-user** web application for tracking recurring monthly expenses 
 
 3. **Open your browser** and visit: http://localhost:5000
 
-## 🔐 First Login
+## First Login
 
 Login with default credentials:
 - **Username:** `admin`
 - **Password:** `password`
 
-⚠️ **Security Notice:** You will be **required to change the password** on first login.
+**Security Notice:** You will be **required to change the password** on first login.
 
-## 💡 How to Use
+## How to Use
 
 ### 1. Database Selection
 After login, select your database from the dropdown:
 - **personal** - Your personal finances (default)
 
 ### 2. Add Your First Bill
-1. Click the **"Add Bill"** button (➕)
+1. Click the **"Add Bill"** button
 2. Enter bill details:
    - Name: "Internet", "Rent", etc.
    - Amount: Fixed amount or check "Varies" for variable costs
    - Frequency: Monthly, Quarterly, or Yearly
    - Due date and optional auto-payment setting
+3. Choose an icon from 70+ options across categories
 
 ### 3. Record Payments
 1. Click **"Pay"** on any bill
 2. Enter payment amount
 3. Choose to advance due date automatically
-4. Payment recorded! 🎉
+4. Payment recorded!
 
 ### 4. View Payment History
 1. Click on any bill's payment amount
 2. View, edit, or delete payment records
 
-## 👥 User & Database Management (Admin Only)
+### 5. Monthly Overview
+- Use the **left/right arrows** in the Dashboard to navigate between months
+- Current month shows **Paid** vs **Remaining** breakdown
+- Past months show **Total Paid** from actual payment records
+
+## User & Database Management (Admin Only)
 
 ### Admin Panel
 - **Note:** Only admins can access the Admin Panel
@@ -97,7 +118,7 @@ After login, select your database from the dropdown:
 2. Assign admin privileges when needed
 3. Control database access permissions
 
-## 🛠️ Application Management
+## Application Management
 
 ### Start Application
 ```bash
@@ -151,15 +172,15 @@ Docker Compose automatically creates persistent data directories:
 - **`dbs/`** - Individual user databases (one per database you create, auto-created)
 - **Your data is automatically preserved between deployments!**
 
-## 🚨 Security Features
+## Security Features
 
-- **🔒 Forced Password Change**: Default admin credentials require immediate password update
-- **🛡️ Data Isolation**: Complete separation between different user databases
-- **🔐 Secure Authentication**: Session-based authentication with automatic timeouts
-- **📝 Input Validation**: All user inputs are properly sanitized
-- **👮 Admin Controls**: Granular permissions and access control
+- **Forced Password Change**: Default admin credentials require immediate password update
+- **Data Isolation**: Complete separation between different user databases
+- **Secure Authentication**: Session-based authentication with automatic timeouts
+- **Input Validation**: All user inputs are properly sanitized
+- **Admin Controls**: Granular permissions and access control
 
-## ❓ Troubleshooting
+## Troubleshooting
 
 ### Can't Access Admin Panel?
 - Ensure you're logged in as an admin user
@@ -178,21 +199,22 @@ Docker Compose automatically creates persistent data directories:
 - Check logs: `docker-compose logs -f`
 - Contact support if persistent issues occur
 
-## 📞 Support
+## Support
 
 For technical issues, please check:
 1. Application logs (`docker-compose logs -f`)
 2. Volume mount configurations (automatically handled by docker-compose)
 3. Docker installation and availability
 
-## 🏗️ Technical Details
+## Technical Details
 
-**Deployment:** Docker Compose with persistent volumes
-**Architecture:** Multi-SQLite database system with access control
-**Frontend:** Pure HTML/CSS/JavaScript (No frameworks)
-**Backend:** Python Flask with session management
-**Database:** SQLite with database-level isolation
+- **Frontend:** React 19 + Mantine 7 + TypeScript + Vite
+- **Backend:** Python Flask with session management
+- **Database:** SQLite with database-level isolation
+- **Architecture:** Multi-SQLite database system with access control
+- **Deployment:** Docker Compose with persistent volumes
+- **Icons:** Tabler Icons (70+ categories)
 
 ---
 
-**Ready to organize your finances securely? Get started with Bills, Bills, Bills! 🚀**
+**Ready to organize your finances securely? Get started with Bills, Bills, Bills!**
