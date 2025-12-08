@@ -73,9 +73,9 @@ export function Calendar({ bills, selectedDate, onDateSelect }: CalendarProps) {
   }, [calendarData]);
 
   return (
-    <Paper p="md" withBorder>
-      <Stack gap="sm">
-        <Title order={5} ta="center">
+    <Paper p="xs" withBorder>
+      <Stack gap={4}>
+        <Title order={6} ta="center">
           {calendarData.monthName} {calendarData.year}
         </Title>
 
@@ -88,7 +88,7 @@ export function Calendar({ bills, selectedDate, onDateSelect }: CalendarProps) {
         </SimpleGrid>
 
         {weeks.map((week, weekIndex) => (
-          <SimpleGrid key={weekIndex} cols={7} spacing={2}>
+          <SimpleGrid key={weekIndex} cols={7} spacing={1}>
             {week.map((day, dayIndex) => {
               if (day === null) {
                 return <div key={`empty-${dayIndex}`} />;
