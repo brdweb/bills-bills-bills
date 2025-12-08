@@ -16,6 +16,7 @@ import { DatePickerInput } from '@mantine/dates';
 import { IconEdit, IconTrash, IconCheck, IconX } from '@tabler/icons-react';
 import type { Payment } from '../api/client';
 import { getPayments, updatePayment, deletePayment } from '../api/client';
+import { PaymentHistoryChart } from './PaymentHistoryChart';
 
 interface PaymentHistoryProps {
   opened: boolean;
@@ -113,6 +114,9 @@ export function PaymentHistory({
       centered
     >
       <Stack gap="md">
+        {/* Payment History Chart */}
+        <PaymentHistoryChart billName={billName} />
+
         {loading ? (
           <Center py="xl">
             <Loader />

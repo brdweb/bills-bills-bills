@@ -183,8 +183,18 @@ if master_needs_init or personal_needs_init:
         personal_db.commit()
         personal_db.close()
 
+        # Ensure admin user exists (may have been deleted or database partially initialized)
+        admin_row = master_db.execute('SELECT id FROM users WHERE username = ?', ('admin',)).fetchone()
+        if admin_row is None:
+            admin_hash = hashlib.sha256("password".encode()).hexdigest()
+            master_db.execute("INSERT INTO users (username, password_hash, role, password_change_required) VALUES (?, ?, ?, ?)",
+                             ("admin", admin_hash, "admin", True))
+            master_db.commit()
+            admin_row = master_db.execute('SELECT id FROM users WHERE username = ?', ('admin',)).fetchone()
+            print("✅ Created missing admin user")
+
         # Grant admin access to personal database (always ensure this)
-        admin_id = master_db.execute('SELECT id FROM users WHERE username = ?', ('admin',)).fetchone()[0]
+        admin_id = admin_row[0]
         try:
             master_db.execute('INSERT INTO user_database_access (user_id, database_id) VALUES (?, (SELECT id FROM databases WHERE name = ?))',
                              (admin_id, "personal"))
@@ -648,6 +658,69 @@ def delete_payment(id):
     db.commit()
     return jsonify({'message': 'Payment deleted'})
 
+@app.route('/api/payments/all', methods=['GET'])
+@login_required
+def get_all_payments():
+    """Get all payments with bill names for the payments view"""
+    try:
+        db = get_db()
+        cur = db.execute("""
+            SELECT
+                p.id,
+                p.amount,
+                p.payment_date,
+                b.name as bill_name,
+                b.icon as bill_icon
+            FROM payments p
+            JOIN bills b ON p.bill_id = b.id
+            ORDER BY p.payment_date DESC
+        """)
+        payments = [dict(row) for row in cur.fetchall()]
+        db.close()
+        return jsonify(payments)
+    except Exception as e:
+        print(f"Error in get_all_payments: {e}")
+        if 'db' in locals():
+            db.close()
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/payments/bill/<string:name>/monthly', methods=['GET'])
+@login_required
+def get_bill_monthly_payments(name):
+    """Get monthly payment totals for a specific bill"""
+    try:
+        db = get_db()
+        cur = db.execute("""
+            SELECT
+                strftime('%Y', p.payment_date) as year,
+                strftime('%m', p.payment_date) as month,
+                SUM(p.amount) as total,
+                COUNT(p.id) as count
+            FROM payments p
+            JOIN bills b ON p.bill_id = b.id
+            WHERE b.name = ?
+            GROUP BY strftime('%Y-%m', p.payment_date)
+            ORDER BY year DESC, month DESC
+            LIMIT 12
+        """, (name,))
+        results = cur.fetchall()
+
+        monthly_data = []
+        for row in results:
+            monthly_data.append({
+                'month': f"{row['year']}-{row['month']}",
+                'total': row['total'],
+                'count': row['count']
+            })
+
+        db.close()
+        return jsonify(monthly_data)
+    except Exception as e:
+        print(f"Error in get_bill_monthly_payments: {e}")
+        if 'db' in locals():
+            db.close()
+        return jsonify({'error': str(e)}), 500
+
 @app.route('/api/payments/monthly', methods=['GET'])
 @login_required
 def get_monthly_payments():
@@ -1056,7 +1129,7 @@ def delete_user(id):
 
 @app.route('/api/version', methods=['GET'])
 def get_version():
-    return jsonify({'version': '1.4.1', 'features': ['enhanced_frequencies', 'automated_migrations', 'auto_payments', 'zero_dollar_payments']})
+    return jsonify({'version': '2.1', 'features': ['enhanced_frequencies', 'automated_migrations', 'auto_payments', 'zero_dollar_payments', 'payment_charts', 'all_payments_view']})
 
 @app.route('/api/process-auto-payments', methods=['POST'])
 @login_required

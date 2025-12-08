@@ -50,6 +50,17 @@ export interface Payment {
   payment_date: string;
 }
 
+export interface PaymentWithBill extends Payment {
+  bill_name: string;
+  bill_icon: string;
+}
+
+export interface MonthlyBillPayment {
+  month: string;
+  total: number;
+  count: number;
+}
+
 export interface LoginResponse {
   message: string;
   role: 'admin' | 'user';
@@ -149,6 +160,12 @@ export const deletePayment = (id: number) => api.delete(`/payments/${id}`);
 
 export const getMonthlyPayments = () =>
   api.get<Record<string, number>>('/api/payments/monthly');
+
+export const getAllPayments = () =>
+  api.get<PaymentWithBill[]>('/api/payments/all');
+
+export const getBillMonthlyPayments = (billName: string) =>
+  api.get<MonthlyBillPayment[]>(`/api/payments/bill/${encodeURIComponent(billName)}/monthly`);
 
 // Auto-payment API
 export const processAutoPayments = () => api.post('/api/process-auto-payments');

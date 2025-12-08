@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Stack, Loader, Center, Button, Divider } from '@mantine/core';
 import { IconRefresh } from '@tabler/icons-react';
 import { useDisclosure } from '@mantine/hooks';
+import { Routes, Route, useNavigate } from 'react-router-dom';
 import { Layout } from './components/Layout';
 import { Sidebar } from './components/Sidebar';
 import { BillList } from './components/BillList';
@@ -12,6 +13,8 @@ import { Calendar } from './components/Calendar';
 import { LoginModal } from './components/LoginModal';
 import { PasswordChangeModal } from './components/PasswordChangeModal';
 import { AdminModal } from './components/AdminPanel/AdminModal';
+import { MonthlyTotalsChart } from './components/MonthlyTotalsChart';
+import { AllPayments } from './pages/AllPayments';
 import { useAuth } from './context/AuthContext';
 import * as api from './api/client';
 import type { Bill } from './api/client';
@@ -28,6 +31,7 @@ export interface BillFilter {
 
 function App() {
   const { isLoggedIn, isLoading, pendingPasswordChange, currentDb } = useAuth();
+  const navigate = useNavigate();
 
   // Bills state
   const [bills, setBills] = useState<Bill[]>([]);
@@ -46,6 +50,7 @@ function App() {
   const [billModalOpened, { open: openBillModal, close: closeBillModal }] = useDisclosure(false);
   const [payModalOpened, { open: openPayModal, close: closePayModal }] = useDisclosure(false);
   const [historyOpened, { open: openHistory, close: closeHistory }] = useDisclosure(false);
+  const [chartOpened, { open: openChart, close: closeChart }] = useDisclosure(false);
 
   // Current editing/paying bill
   const [currentBill, setCurrentBill] = useState<Bill | null>(null);
@@ -239,12 +244,14 @@ function App() {
         onLoginClick={openLogin}
         onAdminClick={openAdmin}
         sidebar={
-          <Stack gap="md">
+          <Stack gap="xs">
             <Sidebar
               bills={bills}
               isLoggedIn={isLoggedIn}
               filter={filter}
               onFilterChange={setFilter}
+              onShowChart={openChart}
+              onShowAllPayments={() => navigate('/all-payments')}
             />
             {isLoggedIn && (
               <>
@@ -273,25 +280,33 @@ function App() {
           </Stack>
         }
       >
-        {billsLoading ? (
-          <Center py="xl">
-            <Loader />
-          </Center>
-        ) : (
-          <BillList
-            bills={filteredBills}
-            onEdit={handleEditBill}
-            onPay={handlePayBill}
-            onAdd={handleAddBill}
-            onViewPayments={handleViewPayments}
-            isLoggedIn={isLoggedIn}
-            hasDatabase={!!currentDb}
-            hasActiveFilter={filter.searchQuery !== '' || filter.dateRange !== 'all' || filter.selectedDate !== null}
-            onClearFilter={() => setFilter({ searchQuery: '', dateRange: 'all', selectedDate: null })}
-            searchQuery={filter.searchQuery}
-            onSearchChange={(query) => setFilter((prev) => ({ ...prev, searchQuery: query }))}
+        <Routes>
+          <Route
+            path="/"
+            element={
+              billsLoading ? (
+                <Center py="xl">
+                  <Loader />
+                </Center>
+              ) : (
+                <BillList
+                  bills={filteredBills}
+                  onEdit={handleEditBill}
+                  onPay={handlePayBill}
+                  onAdd={handleAddBill}
+                  onViewPayments={handleViewPayments}
+                  isLoggedIn={isLoggedIn}
+                  hasDatabase={!!currentDb}
+                  hasActiveFilter={filter.searchQuery !== '' || filter.dateRange !== 'all' || filter.selectedDate !== null}
+                  onClearFilter={() => setFilter({ searchQuery: '', dateRange: 'all', selectedDate: null })}
+                  searchQuery={filter.searchQuery}
+                  onSearchChange={(query) => setFilter((prev) => ({ ...prev, searchQuery: query }))}
+                />
+              )
+            }
           />
-        )}
+          <Route path="/all-payments" element={<AllPayments />} />
+        </Routes>
       </Layout>
 
       {/* Modals */}
@@ -331,6 +346,8 @@ function App() {
         billName={historyBillName}
         onPaymentsChanged={fetchBills}
       />
+
+      <MonthlyTotalsChart opened={chartOpened} onClose={closeChart} />
     </>
   );
 }

@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect } from 'react';
-import { Stack, Title, Text, Paper, Group, Badge, Divider, SimpleGrid, ActionIcon, Loader } from '@mantine/core';
-import { IconCalendar, IconCoin, IconCheck, IconChevronLeft, IconChevronRight } from '@tabler/icons-react';
+import { Stack, Title, Text, Paper, Group, Badge, Divider, SimpleGrid, ActionIcon, Loader, Button } from '@mantine/core';
+import { IconCalendar, IconCoin, IconCheck, IconChevronLeft, IconChevronRight, IconChartLine, IconListDetails } from '@tabler/icons-react';
 import type { Bill } from '../api/client';
 import { getMonthlyPayments } from '../api/client';
 import type { BillFilter, DateRangeFilter } from '../App';
@@ -10,9 +10,11 @@ interface SidebarProps {
   isLoggedIn: boolean;
   filter: BillFilter;
   onFilterChange: (filter: BillFilter) => void;
+  onShowChart?: () => void;
+  onShowAllPayments?: () => void;
 }
 
-export function Sidebar({ bills, isLoggedIn, filter, onFilterChange }: SidebarProps) {
+export function Sidebar({ bills, isLoggedIn, filter, onFilterChange, onShowChart, onShowAllPayments }: SidebarProps) {
   // Month offset: 0 = current month, -1 = last month, etc.
   const [monthOffset, setMonthOffset] = useState(0);
   // Monthly payment totals from API (keyed by "YYYY-MM")
@@ -133,10 +135,10 @@ export function Sidebar({ bills, isLoggedIn, filter, onFilterChange }: SidebarPr
   const isRangeActive = (range: DateRangeFilter) => filter.dateRange === range;
 
   return (
-    <Stack gap="md">
-      <Title order={5}>Dashboard</Title>
+    <Stack gap="xs">
+      <Title order={6}>Dashboard</Title>
 
-      <Paper p="md" withBorder>
+      <Paper p="xs" withBorder>
         <Group justify="space-between" mb="xs">
           <ActionIcon
             variant="subtle"
@@ -157,7 +159,7 @@ export function Sidebar({ bills, isLoggedIn, filter, onFilterChange }: SidebarPr
             <IconChevronRight size={16} />
           </ActionIcon>
         </Group>
-        <Text size="lg" fw={700} c="green" mb="sm" ta="center">
+        <Text size="md" fw={700} c="green" mb="xs" ta="center">
           ${monthlyStats.total.toFixed(2)} total
         </Text>
         {selectedMonthInfo.isCurrentMonth ? (
@@ -198,18 +200,40 @@ export function Sidebar({ bills, isLoggedIn, filter, onFilterChange }: SidebarPr
             </Text>
           </Paper>
         )}
+
+        {/* Chart and All Payments buttons */}
+        {isLoggedIn && (
+          <Group grow mt="sm">
+            <Button
+              variant="light"
+              size="xs"
+              leftSection={<IconChartLine size={14} />}
+              onClick={onShowChart}
+            >
+              Trends
+            </Button>
+            <Button
+              variant="light"
+              size="xs"
+              leftSection={<IconListDetails size={14} />}
+              onClick={onShowAllPayments}
+            >
+              Payments
+            </Button>
+          </Group>
+        )}
       </Paper>
 
       <Divider />
 
       <Title order={6}>
         <Group gap="xs">
-          <IconCalendar size={16} />
+          <IconCalendar size={14} />
           Upcoming Bills
         </Group>
       </Title>
 
-      <Stack gap="xs">
+      <Stack gap={4}>
         {upcomingStats.overdue > 0 && (
           <Group
             justify="space-between"
