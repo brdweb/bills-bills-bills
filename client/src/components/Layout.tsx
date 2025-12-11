@@ -6,7 +6,6 @@ import {
   Select,
   ActionIcon,
   useMantineColorScheme,
-  Text,
   Burger,
 } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
