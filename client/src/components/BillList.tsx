@@ -1,3 +1,4 @@
+import { useState, useEffect } from 'react';
 import {
   Table,
   Group,
@@ -10,10 +11,13 @@ import {
   Stack,
   Card,
   TextInput,
+  Select,
 } from '@mantine/core';
 import { IconEdit, IconCash, IconPlus, IconFilterOff, IconSearch, IconX } from '@tabler/icons-react';
 import type { Bill } from '../api/client';
+import { getAccounts } from '../api/client';
 import { BillIcon } from './BillIcon';
+import type { BillFilter } from '../App';
 
 interface BillListProps {
   bills: Bill[];
@@ -27,6 +31,8 @@ interface BillListProps {
   onClearFilter?: () => void;
   searchQuery?: string;
   onSearchChange?: (query: string) => void;
+  filter: BillFilter;
+  onFilterChange: (filter: BillFilter) => void;
 }
 
 function getFrequencyText(bill: Bill): string {
@@ -101,7 +107,20 @@ export function BillList({
   onClearFilter,
   searchQuery = '',
   onSearchChange,
+  filter,
+  onFilterChange,
 }: BillListProps) {
+  // Accounts list for filtering
+  const [accounts, setAccounts] = useState<string[]>([]);
+
+  // Fetch accounts list when logged in
+  useEffect(() => {
+    if (isLoggedIn) {
+      getAccounts()
+        .then((res) => setAccounts(res.data))
+        .catch((err) => console.error('Failed to fetch accounts:', err));
+    }
+  }, [isLoggedIn, bills]); // Refetch when bills change
   if (!isLoggedIn) {
     return (
       <Card p="xl" withBorder>
@@ -160,7 +179,7 @@ export function BillList({
             No bills yet. Add your first bill to get started!
           </Text>
           <Button leftSection={<IconPlus size={16} />} onClick={onAdd}>
-            Add Bill
+            Add Entry
           </Button>
         </Stack>
       </Card>
@@ -170,11 +189,35 @@ export function BillList({
   return (
     <Stack gap="md">
       <Group justify="space-between">
-        <Title order={4}>Bills</Title>
+        <Group gap="sm">
+          <Select
+            placeholder="All types"
+            data={[
+              { value: 'all', label: 'All Transactions' },
+              { value: 'expense', label: 'Expenses Only' },
+              { value: 'deposit', label: 'Deposits Only' }
+            ]}
+            value={filter.type}
+            onChange={(value) => onFilterChange({ ...filter, type: (value as any) || 'all' })}
+            clearable
+            size="sm"
+            w={180}
+          />
+          <Select
+            placeholder="All accounts"
+            data={accounts}
+            value={filter.account}
+            onChange={(value) => onFilterChange({ ...filter, account: value })}
+            clearable
+            searchable
+            size="sm"
+            w={180}
+          />
+        </Group>
         <Group gap="sm">
           {onSearchChange && (
             <TextInput
-              placeholder="Search bills..."
+              placeholder="Search..."
               leftSection={<IconSearch size={16} />}
               rightSection={
                 searchQuery && (
@@ -194,7 +237,7 @@ export function BillList({
             />
           )}
           <Button leftSection={<IconPlus size={16} />} onClick={onAdd} size="sm">
-            Add Bill
+            Add Entry
           </Button>
         </Group>
       </Group>
@@ -205,6 +248,7 @@ export function BillList({
             <Table.Tr>
               <Table.Th>Name</Table.Th>
               <Table.Th>Amount</Table.Th>
+              <Table.Th>Account</Table.Th>
               <Table.Th>Due Date</Table.Th>
               <Table.Th>Frequency</Table.Th>
               <Table.Th>Actions</Table.Th>
@@ -227,6 +271,18 @@ export function BillList({
                     <div>
                       <Text fw={500}>{bill.name}</Text>
                       <Group gap={4}>
+                        <Badge
+                          size="xs"
+                          color={bill.type === 'deposit' ? 'green' : 'blue'}
+                          variant="light"
+                        >
+                          {bill.type === 'deposit' ? 'Deposit' : 'Expense'}
+                        </Badge>
+                        {bill.account && (
+                          <Badge size="xs" variant="dot" color="gray">
+                            {bill.account}
+                          </Badge>
+                        )}
                         {!!bill.archived && (
                           <Badge size="xs" color="gray" variant="filled">
                             Archived
@@ -243,14 +299,23 @@ export function BillList({
                 </Table.Td>
                 <Table.Td>
                   {bill.varies ? (
-                    <Text c="dimmed">
+                    <Text c={bill.type === 'deposit' ? 'green' : 'red'}>
                       Varies{' '}
                       <Text span size="xs">
                         (~${(bill.avg_amount || 0).toFixed(2)})
                       </Text>
                     </Text>
                   ) : (
-                    <Text fw={500}>${(bill.amount || 0).toFixed(2)}</Text>
+                    <Text fw={500} c={bill.type === 'deposit' ? 'green' : 'red'}>
+                      ${(bill.amount || 0).toFixed(2)}
+                    </Text>
+                  )}
+                </Table.Td>
+                <Table.Td>
+                  {bill.account ? (
+                    <Text size="sm">{bill.account}</Text>
+                  ) : (
+                    <Text size="sm" c="dimmed">—</Text>
                   )}
                 </Table.Td>
                 <Table.Td>

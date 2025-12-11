@@ -1,6 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { Stack, Loader, Center, Button, Divider } from '@mantine/core';
-import { IconRefresh } from '@tabler/icons-react';
+import { Stack, Loader, Center, Button, Divider, Text } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
 import { Routes, Route, useNavigate } from 'react-router-dom';
 import { Layout } from './components/Layout';
@@ -27,6 +26,8 @@ export interface BillFilter {
   searchQuery: string;
   dateRange: DateRangeFilter;
   selectedDate: string | null; // YYYY-MM-DD format
+  type: 'all' | 'expense' | 'deposit';
+  account: string | null;
 }
 
 function App() {
@@ -42,6 +43,8 @@ function App() {
     searchQuery: '',
     dateRange: 'all',
     selectedDate: null,
+    type: 'all',
+    account: null,
   });
 
   // Modal states
@@ -72,6 +75,16 @@ function App() {
     } else {
       // When not searching, hide archived bills
       result = result.filter((bill) => !bill.archived);
+    }
+
+    // Apply type filter
+    if (filter.type !== 'all') {
+      result = result.filter((bill) => bill.type === filter.type);
+    }
+
+    // Apply account filter
+    if (filter.account) {
+      result = result.filter((bill) => bill.account === filter.account);
     }
 
     // Apply date range filter
@@ -216,20 +229,6 @@ function App() {
     await fetchBills();
   };
 
-  const handleProcessAutoPayments = async () => {
-    try {
-      const response = await api.processAutoPayments();
-      if (response.data.processed_count > 0) {
-        alert(`Processed ${response.data.processed_count} auto-payments`);
-        await fetchBills();
-      } else {
-        alert('No auto-payments were due for processing');
-      }
-    } catch (error) {
-      alert('Error processing auto-payments');
-    }
-  };
-
   if (isLoading) {
     return (
       <Center h="100vh">
@@ -267,14 +266,9 @@ function App() {
                   }
                 />
                 <Divider />
-                <Button
-                  variant="light"
-                  leftSection={<IconRefresh size={16} />}
-                  onClick={handleProcessAutoPayments}
-                  fullWidth
-                >
-                  Process Auto-Payments
-                </Button>
+                <Text size="xs" c="dimmed" ta="center">
+                  Bills Bills Bills v2.2 - Licensed under MIT
+                </Text>
               </>
             )}
           </Stack>
@@ -298,9 +292,11 @@ function App() {
                   isLoggedIn={isLoggedIn}
                   hasDatabase={!!currentDb}
                   hasActiveFilter={filter.searchQuery !== '' || filter.dateRange !== 'all' || filter.selectedDate !== null}
-                  onClearFilter={() => setFilter({ searchQuery: '', dateRange: 'all', selectedDate: null })}
+                  onClearFilter={() => setFilter({ searchQuery: '', dateRange: 'all', selectedDate: null, type: 'all', account: null })}
                   searchQuery={filter.searchQuery}
                   onSearchChange={(query) => setFilter((prev) => ({ ...prev, searchQuery: query }))}
+                  filter={filter}
+                  onFilterChange={setFilter}
                 />
               )
             }

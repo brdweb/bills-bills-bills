@@ -8,6 +8,29 @@ const api = axios.create({
   withCredentials: true,
 });
 
+// Add request logging
+api.interceptors.request.use((config) => {
+  console.log('🌐 API Request:', config.method?.toUpperCase(), config.url);
+  if (config.data) {
+    console.log('📦 Request Data:', config.data);
+  }
+  return config;
+});
+
+// Add response logging
+api.interceptors.response.use(
+  (response) => {
+    console.log('✅ API Response:', response.config.method?.toUpperCase(), response.config.url);
+    console.log('📥 Response Data:', response.data);
+    return response;
+  },
+  (error) => {
+    console.error('❌ API Error:', error.config?.method?.toUpperCase(), error.config?.url);
+    console.error('❌ Error Details:', error.response?.data || error.message);
+    return Promise.reject(error);
+  }
+);
+
 // Types
 export interface User {
   id: number;
@@ -40,6 +63,8 @@ export interface Bill {
   paid: boolean;
   archived: boolean;
   icon: string;
+  type: 'expense' | 'deposit';
+  account: string | null;
   created_at: string;
   avg_amount?: number;
 }
@@ -132,10 +157,17 @@ export const getUserDatabases = (userId: number) =>
   api.get<Database[]>(`/users/${userId}/databases`);
 
 // Bills API
-export const getBills = (includeArchived = false) =>
-  api.get<Bill[]>(`/bills${includeArchived ? '?include_archived=true' : ''}`);
+export const getBills = (includeArchived = false, type?: 'expense' | 'deposit') => {
+  let url = `/bills${includeArchived ? '?include_archived=true' : ''}`;
+  if (type) {
+    url += includeArchived ? `&type=${type}` : `?type=${type}`;
+  }
+  return api.get<Bill[]>(url);
+};
 
 export const addBill = (bill: Partial<Bill>) => api.post('/bills', bill);
+
+export const getAccounts = () => api.get<string[]>('/api/accounts');
 
 export const updateBill = (id: number, bill: Partial<Bill>) =>
   api.put(`/bills/${id}`, bill);

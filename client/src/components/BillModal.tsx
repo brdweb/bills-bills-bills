@@ -14,11 +14,13 @@ import {
   Paper,
   SimpleGrid,
   Divider,
+  Autocomplete,
 } from '@mantine/core';
 import { IconArchive, IconArchiveOff, IconTrash } from '@tabler/icons-react';
 import { DatePickerInput } from '@mantine/dates';
 import { useForm } from '@mantine/form';
 import type { Bill } from '../api/client';
+import * as api from '../api/client';
 import { IconPicker } from './IconPicker';
 import { BillIcon } from './BillIcon';
 
@@ -33,6 +35,8 @@ interface BillFormValues {
   next_due: Date | null;
   auto_payment: boolean;
   icon: string;
+  type: 'expense' | 'deposit';
+  account: string | null;
 }
 
 interface BillModalProps {
@@ -67,6 +71,7 @@ const dayOptions = [
 export function BillModal({ opened, onClose, onSave, onArchive, onUnarchive, onDelete, bill }: BillModalProps) {
   const [iconPickerOpen, setIconPickerOpen] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [accounts, setAccounts] = useState<string[]>([]);
 
   const form = useForm<BillFormValues>({
     initialValues: {
@@ -80,6 +85,8 @@ export function BillModal({ opened, onClose, onSave, onArchive, onUnarchive, onD
       next_due: null,
       auto_payment: false,
       icon: 'payment',
+      type: 'expense',
+      account: null,
     },
     validate: {
       name: (value) => (!value.trim() ? 'Name is required' : null),
@@ -109,6 +116,12 @@ export function BillModal({ opened, onClose, onSave, onArchive, onUnarchive, onD
   });
 
   useEffect(() => {
+    if (opened) {
+      api.getAccounts().then(response => setAccounts(response.data));
+    }
+  }, [opened]);
+
+  useEffect(() => {
     if (bill) {
       const frequencyConfig = bill.frequency_config ? JSON.parse(bill.frequency_config) : {};
       form.setValues({
@@ -122,6 +135,8 @@ export function BillModal({ opened, onClose, onSave, onArchive, onUnarchive, onD
         next_due: bill.next_due ? new Date(bill.next_due) : null,
         auto_payment: bill.auto_payment,
         icon: bill.icon || 'payment',
+        type: bill.type || 'expense',
+        account: bill.account || null,
       });
     } else {
       form.reset();
@@ -192,8 +207,12 @@ export function BillModal({ opened, onClose, onSave, onArchive, onUnarchive, onD
         next_due: nextDue,
         auto_payment: values.auto_payment,
         icon: values.icon,
+        type: values.type,
+        account: values.account || null,
       };
 
+      console.log('📤 BillModal: Saving bill with data:', billData);
+      console.log('📤 BillModal: Type =', values.type, 'Account =', values.account);
       await onSave(billData);
       onClose();
     } finally {
@@ -239,7 +258,27 @@ export function BillModal({ opened, onClose, onSave, onArchive, onUnarchive, onD
               </div>
             </Group>
 
-            {/* Row 2: Amount and Varies */}
+            {/* Row 2: Type and Account */}
+            <Group grow align="flex-end">
+              <Select
+                label="Type"
+                data={[
+                  { value: 'expense', label: 'Expense (Bill)' },
+                  { value: 'deposit', label: 'Deposit (Income)' }
+                ]}
+                {...form.getInputProps('type')}
+              />
+              <Autocomplete
+                label="Account"
+                placeholder="Type account name"
+                data={accounts}
+                value={form.values.account || ''}
+                onChange={(value) => form.setFieldValue('account', value || null)}
+                limit={5}
+              />
+            </Group>
+
+            {/* Row 3: Amount and Varies */}
             <Group grow align="flex-end">
               <NumberInput
                 label="Amount"
