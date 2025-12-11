@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { Stack, Loader, Center, Button, Divider, Text } from '@mantine/core';
+import { Stack, Loader, Center, Divider, Text } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
 import { Routes, Route, useNavigate } from 'react-router-dom';
 import { Layout } from './components/Layout';
