@@ -1,18 +1,23 @@
-# Bills, Bills, Bills! Expense Tracker
+# Bills, Bills, Bills! Financial Tracker
 
-A **secure multi-user** web application for tracking recurring monthly expenses and payments with **complete data separation**. Built with React + Mantine frontend and Flask backend.
+A **secure multi-user** web application for tracking recurring expenses and income with **complete data separation**. Built with React + Mantine frontend and Flask backend.
 
 ![Bills Bills Bills Screenshot](docs/screenshot.png)
 
 ## Features
 
+- **Income & Expense Tracking**: Track both recurring bills (expenses) and deposits (income)
+- **Account Management**: Organize transactions by account (checking, savings, credit cards, etc.)
+- **Advanced Filtering**: Filter by transaction type, account, date ranges, and search
+- **Payment Analytics**: Visual charts showing payment trends over time
+- **All Payments View**: Comprehensive list of all recorded payments across all bills
 - **Secure Access**: Forced password change for default admin accounts
 - **Multi-Database**: Complete data isolation between user groups
-- **Modern Dashboard**: Monthly expense tracking with payment history carousel
+- **Modern Dashboard**: Monthly totals with paid/remaining breakdown
 - **Enhanced Frequencies**: Weekly, bi-weekly, monthly, quarterly, yearly, and custom schedules
 - **Flexible Scheduling**: Support for specific dates (1st & 15th), multiple times per week with day picker
 - **Payment Logging**: Record payments with automatic bill cycling
-- **Payment History**: Full history with edit/delete capabilities, monthly totals carousel for past months
+- **Payment History**: Full history with edit/delete capabilities per bill
 - **Auto-Payments**: Mark bills for automatic payment processing
 - **Auto-Migrations**: Automated database updates preserve data during upgrades
 - **Admin Controls**: User and database management
@@ -20,6 +25,16 @@ A **secure multi-user** web application for tracking recurring monthly expenses 
 - **Dark/Light Mode**: Toggle between themes with persistence
 - **Responsive**: Works on desktop, tablet, and mobile
 - **Calendar View**: Visual calendar showing upcoming bill due dates
+
+## What's New in v2.2
+
+- **Income Tracking**: Record recurring deposits alongside expenses to forecast cash flow
+- **Account Field**: Track which account each transaction is paid from or deposited into
+- **Transaction Type Filter**: Quickly filter to show only expenses or only deposits
+- **Account Filter**: View transactions for specific accounts
+- **Payment Analytics Charts**: Visual trends showing payment history over time
+- **All Payments View**: Comprehensive table of all payments across all bills
+- **Enhanced UI**: Condensed sidebar, improved filters placement, and refined layout
 
 ## What's New in v2.0
 
@@ -78,26 +93,36 @@ Login with default credentials:
 After login, select your database from the dropdown:
 - **personal** - Your personal finances (default)
 
-### 2. Add Your First Bill
-1. Click the **"Add Bill"** button
-2. Enter bill details:
-   - Name: "Internet", "Rent", etc.
+### 2. Add Your First Transaction
+1. Click the **"Add Entry"** button
+2. Enter transaction details:
+   - Name: "Internet", "Paycheck", etc.
+   - Type: Choose **Expense (Bill)** or **Deposit (Income)**
+   - Account: Type the account name (checking, savings, etc.) - autocomplete suggests existing accounts
    - Amount: Fixed amount or check "Varies" for variable costs
-   - Frequency: Monthly, Quarterly, or Yearly
+   - Frequency: Weekly, Bi-weekly, Monthly, Quarterly, Yearly, or Custom
    - Due date and optional auto-payment setting
 3. Choose an icon from 70+ options across categories
 
-### 3. Record Payments
-1. Click **"Pay"** on any bill
-2. Enter payment amount
+### 3. Record Payments/Deposits
+1. Click the green **pay button** on any transaction
+2. Enter payment/deposit amount
 3. Choose to advance due date automatically
-4. Payment recorded!
+4. Transaction recorded!
 
-### 4. View Payment History
-1. Click on any bill's payment amount
-2. View, edit, or delete payment records
+### 4. Filter Your View
+- **Transaction Type**: Show all, expenses only, or deposits only
+- **Account**: Filter by specific account
+- **Search**: Find transactions by name
+- **Date Ranges**: Click upcoming bill badges to filter by time period
 
-### 5. Monthly Overview
+### 5. View Payment History
+1. Click on any transaction row to see its payment history
+2. View, edit, or delete individual payment records
+3. Click **"Trends"** to see payment analytics charts
+4. Click **"Payments"** to see all payments across all transactions
+
+### 6. Monthly Overview
 - Use the **left/right arrows** in the Dashboard to navigate between months
 - Current month shows **Paid** vs **Remaining** breakdown
 - Past months show **Total Paid** from actual payment records

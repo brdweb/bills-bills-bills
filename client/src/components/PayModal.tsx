@@ -22,6 +22,8 @@ export function PayModal({ opened, onClose, onPay, bill }: PayModalProps) {
   const [advanceDue, setAdvanceDue] = useState(true);
   const [loading, setLoading] = useState(false);
 
+  const isDeposit = bill?.type === 'deposit';
+
   useEffect(() => {
     if (bill && opened) {
       setAmount(bill.amount || '');
@@ -47,16 +49,16 @@ export function PayModal({ opened, onClose, onPay, bill }: PayModalProps) {
     <Modal
       opened={opened}
       onClose={onClose}
-      title={`Pay: ${bill?.name || 'Bill'}`}
+      title={`${isDeposit ? 'Record' : 'Pay'}: ${bill?.name || 'Bill'}`}
       centered
     >
       <Stack gap="md">
         <Text size="sm" c="dimmed">
-          Record a payment for this bill.
+          Record a {isDeposit ? 'deposit' : 'payment'} for this {isDeposit ? 'income' : 'bill'}.
         </Text>
 
         <NumberInput
-          label="Payment Amount"
+          label={isDeposit ? 'Deposit Amount' : 'Payment Amount'}
           placeholder="0.00"
           prefix="$"
           decimalScale={2}
@@ -64,12 +66,12 @@ export function PayModal({ opened, onClose, onPay, bill }: PayModalProps) {
           min={0}
           value={amount}
           onChange={(val) => setAmount(val === '' ? '' : Number(val))}
-          description={bill?.varies ? 'This bill has a variable amount' : undefined}
+          description={bill?.varies ? `This ${isDeposit ? 'deposit' : 'bill'} has a variable amount` : undefined}
         />
 
         <Switch
           label="Advance due date"
-          description="Create the next recurring bill"
+          description={`Create the next recurring ${isDeposit ? 'deposit' : 'bill'}`}
           checked={advanceDue}
           onChange={(event) => setAdvanceDue(event.currentTarget.checked)}
         />
@@ -79,12 +81,12 @@ export function PayModal({ opened, onClose, onPay, bill }: PayModalProps) {
             Cancel
           </Button>
           <Button
-            color="green"
+            color={isDeposit ? 'green' : 'blue'}
             onClick={handleSubmit}
             loading={loading}
             disabled={amount === '' || (typeof amount === 'number' && amount < 0)}
           >
-            Record Payment
+            Record {isDeposit ? 'Deposit' : 'Payment'}
           </Button>
         </Group>
       </Stack>

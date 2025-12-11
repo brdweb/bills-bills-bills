@@ -168,6 +168,8 @@ if master_needs_init or personal_needs_init:
                 paid BOOLEAN DEFAULT FALSE,
                 archived BOOLEAN DEFAULT FALSE,
                 icon TEXT DEFAULT 'payment',
+                type TEXT CHECK(type IN ('expense', 'deposit')) DEFAULT 'expense',
+                account TEXT DEFAULT NULL,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )''')
             print("✅ Created bills table in personal DB")
@@ -421,18 +423,32 @@ def apply_database_migrations(db):
             applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             description TEXT
         )''')
-        
+
         # Check current version
         current_version = db.execute('SELECT MAX(version) FROM schema_version').fetchone()[0]
         if current_version is None:
             # First time setup - mark as version 3 (current)
-            db.execute('INSERT INTO schema_version (version, description) VALUES (?, ?)', 
+            db.execute('INSERT INTO schema_version (version, description) VALUES (?, ?)',
                       (3, 'Enhanced frequency support and migration tracking'))
             print("Initialized schema version tracking at version 3")
-        
+
         db.commit()
     except sqlite3.OperationalError as e:
         print(f"Migration error: {e}")
+        pass
+
+    # Migration 4: Add type and account fields for deposits/accounts support
+    try:
+        current_version = db.execute('SELECT MAX(version) FROM schema_version').fetchone()[0]
+        if current_version is None or current_version < 4:
+            db.execute("ALTER TABLE bills ADD COLUMN type TEXT CHECK(type IN ('expense', 'deposit')) DEFAULT 'expense'")
+            db.execute("ALTER TABLE bills ADD COLUMN account TEXT DEFAULT NULL")
+            db.execute('INSERT INTO schema_version (version, description) VALUES (?, ?)',
+                      (4, 'Add type (expense/deposit) and account fields'))
+            print("Applied migration 4: Added type and account columns")
+            db.commit()
+    except sqlite3.OperationalError as e:
+        print(f"Migration 4 error (may already exist): {e}")
         pass
 
 @app.before_request
@@ -444,17 +460,26 @@ def create_table():
 def get_bills():
     db = get_db()
     include_archived = request.args.get('include_archived', 'false').lower() == 'true'
+    type_filter = request.args.get('type', None)
+
     if include_archived:
         # Get only the most recent entry per bill name (highest id = most recent)
-        cur = db.execute("""
+        query = """
             SELECT b.* FROM bills b
             INNER JOIN (
                 SELECT name, MAX(id) as max_id FROM bills GROUP BY name
             ) latest ON b.id = latest.max_id
-            ORDER BY b.archived, b.next_due
-        """)
+        """
+        if type_filter:
+            query += f" WHERE b.type = '{type_filter}'"
+        query += " ORDER BY b.archived, b.next_due"
+        cur = db.execute(query)
     else:
-        cur = db.execute("SELECT * FROM bills WHERE archived = 0 ORDER BY next_due")
+        query = "SELECT * FROM bills WHERE archived = 0"
+        if type_filter:
+            query += f" AND type = '{type_filter}'"
+        query += " ORDER BY next_due"
+        cur = db.execute(query)
     bills = [dict(bill) for bill in cur.fetchall()]
     for bill in bills:
         if bill['varies']:
@@ -468,6 +493,7 @@ def get_bills():
 def add_bill():
     try:
         data = request.get_json()
+        print("📥 Backend: Received POST /bills with data:", data)
         name = data.get('name')
         amount = data.get('amount') if not data.get('varies', False) else None
         varies = data.get('varies', False)
@@ -477,11 +503,16 @@ def add_bill():
         next_due = data.get('next_due')
         auto_payment = data.get('auto_payment', False)
         icon = data.get('icon', 'payment')
-        
+        type_ = data.get('type', 'expense')
+        account = data.get('account', None)
+
+        print(f"📝 Backend: Parsed - type={type_}, account={account}")
+
         db = get_db()
-        db.execute('INSERT INTO bills (name, amount, varies, frequency, frequency_type, frequency_config, next_due, auto_payment, icon) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
-                   (name, amount, varies, frequency, frequency_type, frequency_config, next_due, auto_payment, icon))
+        db.execute('INSERT INTO bills (name, amount, varies, frequency, frequency_type, frequency_config, next_due, auto_payment, icon, type, account) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+                   (name, amount, varies, frequency, frequency_type, frequency_config, next_due, auto_payment, icon, type_, account))
         db.commit()
+        print(f"✅ Backend: Bill '{name}' added successfully with type={type_}, account={account}")
         return jsonify({'message': 'Bill added'}), 201
     except Exception as e:
         print(f"Error in add_bill: {e}")
@@ -492,6 +523,7 @@ def add_bill():
 def update_bill(id):
     try:
         data = request.get_json()
+        print(f"📥 Backend: Received PUT /bills/{id} with data:", data)
         name = data.get('name')
         amount = data.get('amount')
         frequency = data.get('frequency')
@@ -501,7 +533,11 @@ def update_bill(id):
         auto_payment = data.get('auto_payment')
         varies = data.get('varies')
         icon = data.get('icon')
-        
+        type_ = data.get('type')
+        account = data.get('account')
+
+        print(f"📝 Backend: Parsed - type={type_}, account={account}, 'type' in data={'type' in data}, 'account' in data={'account' in data}")
+
         db = get_db()
         fields = []
         values = []
@@ -514,10 +550,16 @@ def update_bill(id):
         if auto_payment is not None: fields.append('auto_payment = ?'); values.append(auto_payment)
         if varies is not None: fields.append('varies = ?'); values.append(varies)
         if icon is not None: fields.append('icon = ?'); values.append(icon)
+        if 'type' in data: fields.append('type = ?'); values.append(type_)
+        if 'account' in data: fields.append('account = ?'); values.append(account)
         values.append(id)
         if fields:
-            db.execute(f'UPDATE bills SET {", ".join(fields)} WHERE id = ?', values)
+            sql = f'UPDATE bills SET {", ".join(fields)} WHERE id = ?'
+            print(f"🔧 Backend: Executing SQL: {sql}")
+            print(f"🔧 Backend: Values: {values}")
+            db.execute(sql, values)
             db.commit()
+            print(f"✅ Backend: Bill {id} updated successfully")
         return jsonify({'message': 'Bill updated'})
     except Exception as e:
         print(f"Error in update_bill: {e}")
@@ -600,10 +642,12 @@ def pay_bill(id):
             )
 
             # Add new bill with same configuration
-            db.execute('INSERT INTO bills (name, amount, varies, frequency, frequency_type, frequency_config, next_due, auto_payment, icon) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
-                       (bill['name'], bill['amount'], bill['varies'], bill['frequency'], 
+            db.execute('INSERT INTO bills (name, amount, varies, frequency, frequency_type, frequency_config, next_due, auto_payment, icon, type, account) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+                       (bill['name'], bill['amount'], bill['varies'], bill['frequency'],
                         frequency_type, frequency_config_str,
-                        next_due_date.isoformat(), bill['auto_payment'], bill['icon']))
+                        next_due_date.isoformat(), bill['auto_payment'], bill['icon'],
+                        bill['type'] if 'type' in bill.keys() and bill['type'] else 'expense',
+                        bill['account'] if 'account' in bill.keys() else None))
         
         db.commit()
         db.close()
@@ -680,6 +724,27 @@ def get_all_payments():
         return jsonify(payments)
     except Exception as e:
         print(f"Error in get_all_payments: {e}")
+        if 'db' in locals():
+            db.close()
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/accounts', methods=['GET'])
+@login_required
+def get_accounts():
+    """Get list of distinct account names used in bills/deposits"""
+    try:
+        db = get_db()
+        cur = db.execute("""
+            SELECT DISTINCT account
+            FROM bills
+            WHERE account IS NOT NULL AND account != ''
+            ORDER BY account
+        """)
+        accounts = [row[0] for row in cur.fetchall()]
+        db.close()
+        return jsonify(accounts)
+    except Exception as e:
+        print(f"Error in get_accounts: {e}")
         if 'db' in locals():
             db.close()
         return jsonify({'error': str(e)}), 500
@@ -952,6 +1017,8 @@ def create_database():
             paid BOOLEAN DEFAULT FALSE,
             archived BOOLEAN DEFAULT FALSE,
             icon TEXT DEFAULT 'payment',
+            type TEXT CHECK(type IN ('expense', 'deposit')) DEFAULT 'expense',
+            account TEXT DEFAULT NULL,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )''')
         db.execute('''CREATE TABLE payments (
@@ -1129,7 +1196,7 @@ def delete_user(id):
 
 @app.route('/api/version', methods=['GET'])
 def get_version():
-    return jsonify({'version': '2.1', 'features': ['enhanced_frequencies', 'automated_migrations', 'auto_payments', 'zero_dollar_payments', 'payment_charts', 'all_payments_view']})
+    return jsonify({'version': '2.2', 'features': ['enhanced_frequencies', 'automated_migrations', 'auto_payments', 'zero_dollar_payments', 'payment_charts', 'all_payments_view', 'deposits', 'accounts']})
 
 @app.route('/api/process-auto-payments', methods=['POST'])
 @login_required
@@ -1305,4 +1372,5 @@ def change_password():
 
 # Remove the /init-db endpoint as auto-init handles everything
 if __name__ == '__main__':
-    app.run(debug=os.environ.get('FLASK_DEBUG', 'false').lower() in ('true', '1', 'yes'))
+    port = int(os.environ.get('FLASK_RUN_PORT', 5001))
+    app.run(debug=os.environ.get('FLASK_DEBUG', 'false').lower() in ('true', '1', 'yes'), port=port)

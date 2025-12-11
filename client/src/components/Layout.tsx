@@ -36,7 +36,6 @@ export function Layout({ children, sidebar, onLoginClick, onAdminClick }: Layout
     <AppShell
       header={{ height: 60 }}
       navbar={{ width: 280, breakpoint: 'sm', collapsed: { mobile: !opened } }}
-      footer={{ height: 40 }}
       padding="md"
     >
       <AppShell.Header>
@@ -110,12 +109,6 @@ export function Layout({ children, sidebar, onLoginClick, onAdminClick }: Layout
       <AppShell.Main>
         {children}
       </AppShell.Main>
-
-      <AppShell.Footer>
-        <Text size="xs" c="dimmed" ta="center" py="xs">
-          Bills Bills Bills v2.1 - Licensed under MIT
-        </Text>
-      </AppShell.Footer>
     </AppShell>
   );
 }

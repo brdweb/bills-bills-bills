@@ -73,13 +73,13 @@ export function Calendar({ bills, selectedDate, onDateSelect }: CalendarProps) {
   }, [calendarData]);
 
   return (
-    <Paper p="xs" withBorder>
-      <Stack gap={4}>
-        <Title order={6} ta="center">
+    <Paper p={6} withBorder>
+      <Stack gap={2}>
+        <Title order={6} ta="center" mb={2}>
           {calendarData.monthName} {calendarData.year}
         </Title>
 
-        <SimpleGrid cols={7} spacing={2}>
+        <SimpleGrid cols={7} spacing={1}>
           {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((day) => (
             <Text key={day} size="xs" fw={600} ta="center" c="dimmed">
               {day}
@@ -143,7 +143,7 @@ export function Calendar({ bills, selectedDate, onDateSelect }: CalendarProps) {
                   }}
                 >
                   <Text
-                    size="sm"
+                    size="xs"
                     fw={isToday || billCount > 0 || isSelected ? 600 : 400}
                     c={textColor}
                   >
