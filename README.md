@@ -6,25 +6,13 @@ A **secure multi-user** web application for tracking recurring expenses and inco
 
 ## Features
 
-- **Income & Expense Tracking**: Track both recurring bills (expenses) and deposits (income)
-- **Account Management**: Organize transactions by account (checking, savings, credit cards, etc.)
-- **Advanced Filtering**: Filter by transaction type, account, date ranges, and search
-- **Payment Analytics**: Visual charts showing payment trends over time
-- **All Payments View**: Comprehensive list of all recorded payments across all bills
-- **Secure Access**: Forced password change for default admin accounts
-- **Multi-Database**: Complete data isolation between user groups
-- **Modern Dashboard**: Monthly totals with paid/remaining breakdown
-- **Enhanced Frequencies**: Weekly, bi-weekly, monthly, quarterly, yearly, and custom schedules
-- **Flexible Scheduling**: Support for specific dates (1st & 15th), multiple times per week with day picker
-- **Payment Logging**: Record payments with automatic bill cycling
-- **Payment History**: Full history with edit/delete capabilities per bill
-- **Auto-Payments**: Mark bills for automatic payment processing
-- **Auto-Migrations**: Automated database updates preserve data during upgrades
-- **Admin Controls**: User and database management
-- **Custom Icons**: 70+ icons including sports, finance, utilities, entertainment, and more
-- **Dark/Light Mode**: Toggle between themes with persistence
-- **Responsive**: Works on desktop, tablet, and mobile
-- **Calendar View**: Visual calendar showing upcoming bill due dates
+- **Income & Expense Tracking**: Track both recurring bills and deposits to forecast cash flow
+- **Account Management**: Organize transactions by account with intelligent filtering
+- **Payment Analytics**: Visual charts and comprehensive payment history across all transactions
+- **Multi-Database**: Complete data isolation between user groups with granular permissions
+- **Enhanced Frequencies**: Weekly, bi-weekly, monthly (including 1st & 15th), quarterly, yearly, and custom schedules
+- **Auto-Payments**: Automatic payment processing for recurring transactions
+- **Modern UI**: Responsive design with dark/light mode, 70+ custom icons, and visual calendar
 
 ## What's New in v2.2
 
@@ -35,15 +23,6 @@ A **secure multi-user** web application for tracking recurring expenses and inco
 - **Payment Analytics Charts**: Visual trends showing payment history over time
 - **All Payments View**: Comprehensive table of all payments across all bills
 - **Enhanced UI**: Condensed sidebar, improved filters placement, and refined layout
-
-## What's New in v2.0
-
-- **React + Mantine UI**: Complete frontend rewrite with modern component library
-- **Monthly Payment Carousel**: Navigate through previous months to see payment history
-- **Sports Icons**: Added soccer, football, baseball, basketball, tennis, volleyball, golf, trophy
-- **Improved Dashboard**: "This Month" section shows all bills due regardless of frequency
-- **Payment Tracking**: Past months show only actual recorded payments, not just due dates
-- **Dark Mode**: System-aware dark/light theme toggle
 
 ## Quick Start
 
@@ -204,32 +183,6 @@ Docker Compose automatically creates persistent data directories:
 - **Secure Authentication**: Session-based authentication with automatic timeouts
 - **Input Validation**: All user inputs are properly sanitized
 - **Admin Controls**: Granular permissions and access control
-
-## Troubleshooting
-
-### Can't Access Admin Panel?
-- Ensure you're logged in as an admin user
-- Check that the Admin button appears after login
-
-### Login Problems?
-- Verify default credentials: `admin` / `password`
-- If admin login succeeds, you may need to change the password first
-
-### Data Loss?
-- Check that volume mounts are working properly
-- Ensure `data/` and `dbs/` directories exist and are writable
-
-### Database Errors?
-- Restart the application (`docker-compose restart`)
-- Check logs: `docker-compose logs -f`
-- Contact support if persistent issues occur
-
-## Support
-
-For technical issues, please check:
-1. Application logs (`docker-compose logs -f`)
-2. Volume mount configurations (automatically handled by docker-compose)
-3. Docker installation and availability
 
 ## Technical Details
 
