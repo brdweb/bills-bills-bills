@@ -1,6 +1,6 @@
 # Bills, Bills, Bills! Financial Tracker
 
-A **secure multi-user** web application for tracking recurring expenses and income with **complete data separation**. Built with React + Mantine frontend and Flask backend.
+A **secure multi-user** web application for tracking recurring expenses and income with **complete data separation**. Built with React + Mantine frontend and Flask + PostgreSQL backend.
 
 ![Bills Bills Bills Screenshot](docs/screenshot.png)
 
@@ -9,32 +9,29 @@ A **secure multi-user** web application for tracking recurring expenses and inco
 - **Income & Expense Tracking**: Track both recurring bills and deposits to forecast cash flow
 - **Account Management**: Organize transactions by account with intelligent filtering
 - **Payment Analytics**: Visual charts and comprehensive payment history across all transactions
-- **Multi-Database**: Complete data isolation between user groups with granular permissions
+- **Multi-Tenant Architecture**: Row-level data isolation with granular user permissions
 - **Enhanced Frequencies**: Weekly, bi-weekly, monthly (including 1st & 15th), quarterly, yearly, and custom schedules
 - **Auto-Payments**: Automatic payment processing for recurring transactions
 - **Modern UI**: Responsive design with dark/light mode, 70+ custom icons, and visual calendar
 
-## What's New in v2.2
+## What's New in v3.0
 
-- **Income Tracking**: Record recurring deposits alongside expenses to forecast cash flow
-- **Account Field**: Track which account each transaction is paid from or deposited into
-- **Transaction Type Filter**: Quickly filter to show only expenses or only deposits
-- **Account Filter**: View transactions for specific accounts
-- **Payment Analytics Charts**: Visual trends showing payment history over time
-- **All Payments View**: Comprehensive table of all payments across all bills
-- **Enhanced UI**: Condensed sidebar, improved filters placement, and refined layout
+- **PostgreSQL Backend**: Migrated from SQLite to PostgreSQL for improved scalability and SaaS readiness
+- **Row-Level Tenancy**: Single database with complete data isolation between user groups
+- **SQLAlchemy ORM**: Modern database models with migration support
+- **O'Saasy License**: New license permits broad use while reserving SaaS commercialization rights
+- **Bug Fixes**: Fixed SPA routing, calendar badge positioning, and API caching issues
 
-## License & Commercialization
+## License
 
-- **Versions ≤ 2.2**: Released under the [MIT License](LICENSE).
-- **Versions 3.0+ (Upcoming)**: Will be released under the **O'sassy License**. 
+This project is licensed under the [O'Saasy License](LICENSE) - a modified MIT license that permits broad use while restricting SaaS commercialization by third parties.
 
-This transition supports the future development of "Bills, Bills, Bills!" as a scalable SaaS platform.
+Learn more at [osaasy.dev](https://osaasy.dev/)
 
 ## Quick Start
 
 ### Prerequisites
-- Docker installed and running
+- Docker and Docker Compose installed
 - Web browser
 
 ### Run the Application
@@ -42,8 +39,6 @@ This transition supports the future development of "Bills, Bills, Bills!" as a s
 1. **Create a `docker-compose.yml` file** with the following content:
 
    ```yaml
-   version: '3.8'
-
    services:
      bills-app:
        image: ghcr.io/brdweb/bills-bills-bills:latest
@@ -51,19 +46,42 @@ This transition supports the future development of "Bills, Bills, Bills!" as a s
        ports:
          - "5000:5000"
        restart: unless-stopped
+       environment:
+         - DATABASE_URL=postgresql://billsuser:billspass@db:5432/billsdb
+         - FLASK_SECRET_KEY=change-this-to-a-secure-random-string
+       depends_on:
+         - db
+
+     db:
+       image: postgres:16-alpine
+       container_name: bills-db
+       restart: unless-stopped
+       environment:
+         - POSTGRES_USER=billsuser
+         - POSTGRES_PASSWORD=billspass
+         - POSTGRES_DB=billsdb
        volumes:
-         # Persistent data storage for all databases
-         - ./data:/app/data
-         # Mount the shared database directory
-         - ./dbs:/app/dbs
+         - postgres_data:/var/lib/postgresql/data
+
+   volumes:
+     postgres_data:
    ```
 
-2. **Run the application** (database auto-initializes on first startup):
+2. **Run the application**:
    ```bash
-   docker-compose up -d
+   docker compose up -d
    ```
 
 3. **Open your browser** and visit: http://localhost:5000
+
+### Environment Variables
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `DATABASE_URL` | PostgreSQL connection string | `postgresql://billsuser:billspass@db:5432/billsdb` |
+| `FLASK_SECRET_KEY` | Secret key for session encryption | Auto-generated (set in production!) |
+
+**Security Note:** Always set a strong, unique `FLASK_SECRET_KEY` in production environments.
 
 ## First Login
 
@@ -77,7 +95,7 @@ Login with default credentials:
 
 ### 1. Database Selection
 After login, select your database from the dropdown:
-- **personal** - Your personal finances (default)
+- **Personal Finances** - Your personal finances (default)
 
 ### 2. Add Your First Transaction
 1. Click the **"Add Entry"** button
@@ -111,6 +129,7 @@ After login, select your database from the dropdown:
 ### 6. Monthly Overview
 - Use the **left/right arrows** in the Dashboard to navigate between months
 - Current month shows **Paid** vs **Remaining** breakdown
+- **Remaining** = Sum of unpaid expense bills due in the selected month
 - Past months show **Total Paid** from actual payment records
 
 ## User & Database Management (Admin Only)
@@ -133,73 +152,86 @@ After login, select your database from the dropdown:
 
 ### Start Application
 ```bash
-# Using docker-compose (recommended)
-docker-compose up -d
-
-# Or manually
-docker start bills-bills-bills
+docker compose up -d
 ```
 
 ### View Logs
 ```bash
-# Using docker-compose
-docker-compose logs -f
-
-# Or manually
-docker logs -f bills-bills-bills
+docker compose logs -f bills-app
 ```
 
 ### Stop Application
 ```bash
-# Using docker-compose
-docker-compose down
-
-# Or manually
-docker stop bills-bills-bills
+docker compose down
 ```
 
 ### Update to New Version
 ```bash
-docker pull ghcr.io/brdweb/bills-bills-bills:latest
-docker-compose down
-docker-compose up -d
+docker compose pull
+docker compose down
+docker compose up -d
 ```
 
-### Testing Fresh Installation
-To test a completely fresh installation (deletes all existing data and reinitializes):
-1. Add to your docker-compose.yml under the service:
-   ```yaml
-   environment:
-     - FORCE_FRESH_INIT=true
-   ```
-2. Run `docker-compose up -d`
-3. Remove the environment variable after testing to prevent accidental data loss.
+### Backup PostgreSQL Data
+```bash
+# Create backup
+docker exec bills-db pg_dump -U billsuser billsdb > backup.sql
 
-**Warning:** This will delete all existing databases and data! Use only for testing.
+# Restore backup
+docker exec -i bills-db psql -U billsuser billsdb < backup.sql
+```
 
 ### Data Persistence
-Docker Compose automatically creates persistent data directories:
-- **`data/`** - User accounts, permissions, and system settings (auto-created)
-- **`dbs/`** - Individual user databases (one per database you create, auto-created)
+Docker Compose uses a named volume for PostgreSQL data:
+- **`postgres_data`** - All application data (users, databases, bills, payments)
 - **Your data is automatically preserved between deployments!**
+
+## Upgrading from v2.x
+
+Version 3.0 uses PostgreSQL instead of SQLite. If upgrading from v2.x:
+
+1. **Backup your v2.x data** (the `data/` and `dbs/` directories)
+2. **Deploy v3.0** with the new docker-compose.yml (includes PostgreSQL)
+3. **Data Migration**: The application includes a migration script that can import data from SQLite databases. Contact the maintainer for migration assistance.
+
+**Note:** Fresh installations of v3.0 do not require any migration steps.
 
 ## Security Features
 
 - **Forced Password Change**: Default admin credentials require immediate password update
-- **Data Isolation**: Complete separation between different user databases
-- **Secure Authentication**: Session-based authentication with automatic timeouts
+- **Row-Level Isolation**: Complete separation between different user databases
+- **Secure Authentication**: Session-based authentication with secure cookies
 - **Input Validation**: All user inputs are properly sanitized
 - **Admin Controls**: Granular permissions and access control
+- **HTTPS Ready**: Deploy behind a reverse proxy (Traefik, nginx) for SSL
 
 ## Technical Details
 
 - **Frontend:** React 19 + Mantine 7 + TypeScript + Vite
-- **Backend:** Python Flask with session management
-- **Database:** SQLite with database-level isolation
-- **Architecture:** Multi-SQLite database system with access control
+- **Backend:** Python Flask with SQLAlchemy ORM
+- **Database:** PostgreSQL 16 with row-level tenancy
+- **WSGI Server:** Gunicorn for production
 - **Deployment:** Docker Compose with persistent volumes
 - **Icons:** Tabler Icons (70+ categories)
+
+## API Endpoints
+
+The application exposes a REST API for all operations:
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/login` | POST | Authenticate user |
+| `/logout` | POST | End session |
+| `/me` | GET | Current user info |
+| `/bills` | GET/POST | List/create bills |
+| `/bills/<id>` | PUT/DELETE | Update/archive bill |
+| `/bills/<id>/pay` | POST | Record payment |
+| `/api/payments/monthly` | GET | Monthly payment totals |
+| `/api/accounts` | GET | List accounts |
+| `/api/version` | GET | API version info |
 
 ---
 
 **Ready to organize your finances securely? Get started with Bills, Bills, Bills!**
+
+Licensed under [O'Saasy](https://osaasy.dev/) | [View on GitHub](https://github.com/brdweb/bills-bills-bills)
