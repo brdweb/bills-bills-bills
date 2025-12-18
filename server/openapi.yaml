@@ -1,8 +1,8 @@
 openapi: 3.0.3
 info:
-  title: Bills Bills Bills API
+  title: BillManager API
   description: |
-    REST API for Bills Bills Bills - a multi-tenant bill tracking application.
+    REST API for BillManager - a multi-tenant bill tracking application.
 
     ## Authentication
 
@@ -19,8 +19,8 @@ info:
     name: O'Saasy License
     url: https://osaasy.dev/
   contact:
-    name: Bills Bills Bills
-    url: https://github.com/brdweb/bills-bills-bills
+    name: BillManager
+    url: https://github.com/brdweb/billmanager
 
 servers:
   - url: /api/v2

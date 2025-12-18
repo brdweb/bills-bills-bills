@@ -271,7 +271,7 @@ function App() {
                 />
                 <Divider />
                 <Text size="xs" c="dimmed" ta="center">
-                  Bills Bills Bills v3.0.1 - Licensed under{' '}
+                  BillManager v3.1.0 - Licensed under{' '}
                   <Anchor href="https://osaasy.dev/" target="_blank" size="xs">
                     O'Saasy
                   </Anchor>

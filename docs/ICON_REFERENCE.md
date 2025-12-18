@@ -1,4 +1,4 @@
-# 🎨 Icon Reference for Bills, Bills, Bills
+# 🎨 Icon Reference for BillManager
 
 ## Available Icon Categories
 

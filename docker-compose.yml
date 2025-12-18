@@ -1,7 +1,7 @@
 services:
-  bills-app:
+  billmanager-app:
     build: .
-    container_name: bills-bills-bills
+    container_name: billmanager
     ports:
       - "5000:5000"
     restart: unless-stopped

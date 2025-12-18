@@ -1007,7 +1007,7 @@ def api_docs():
     return '''<!DOCTYPE html>
 <html>
 <head>
-    <title>Bills Bills Bills API - Documentation</title>
+    <title>BillManager API - Documentation</title>
     <link rel="stylesheet" href="https://unpkg.com/swagger-ui-dist@5/swagger-ui.css">
 </head>
 <body>

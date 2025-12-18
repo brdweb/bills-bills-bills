@@ -1,8 +1,8 @@
-# Bills, Bills, Bills! Financial Tracker
+# BillManager - Financial Tracker
 
 A **secure multi-user** web application for tracking recurring expenses and income with **complete data separation**. Built with React + Mantine frontend and Flask + PostgreSQL backend.
 
-![Bills Bills Bills Screenshot](docs/screenshot.png)
+![BillManager Screenshot](docs/screenshot.png)
 
 ## Features
 
@@ -41,8 +41,8 @@ Learn more at [osaasy.dev](https://osaasy.dev/)
    ```yaml
    services:
      bills-app:
-       image: ghcr.io/brdweb/bills-bills-bills:latest
-       container_name: bills-bills-bills
+       image: ghcr.io/brdweb/billmanager:latest
+       container_name: billmanager
        ports:
          - "5000:5000"
        restart: unless-stopped
@@ -89,8 +89,8 @@ If you already have a PostgreSQL server or prefer to use a managed database serv
    ```yaml
    services:
      bills-app:
-       image: ghcr.io/brdweb/bills-bills-bills:latest
-       container_name: bills-bills-bills
+       image: ghcr.io/brdweb/billmanager:latest
+       container_name: billmanager
        ports:
          - "5000:5000"
        restart: unless-stopped
@@ -102,11 +102,11 @@ If you already have a PostgreSQL server or prefer to use a managed database serv
 3. **Or run with Docker directly**:
    ```bash
    docker run -d \
-     --name bills-bills-bills \
+     --name billmanager \
      -p 5000:5000 \
      -e DATABASE_URL=postgresql://billsuser:your-secure-password@your-db-host:5432/billsdb \
      -e FLASK_SECRET_KEY=change-this-to-a-secure-random-string \
-     ghcr.io/brdweb/bills-bills-bills:latest
+     ghcr.io/brdweb/billmanager:latest
    ```
 
 **Database URL Format:**
@@ -286,6 +286,6 @@ The application exposes a REST API for all operations:
 
 ---
 
-**Ready to organize your finances securely? Get started with Bills, Bills, Bills!**
+**Ready to organize your finances securely? Get started with BillManager!**
 
-Licensed under [O'Saasy](https://osaasy.dev/) | [View on GitHub](https://github.com/brdweb/bills-bills-bills)
+Licensed under [O'Saasy](https://osaasy.dev/) | [View on GitHub](https://github.com/brdweb/billmanager)

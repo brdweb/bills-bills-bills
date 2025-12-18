@@ -42,7 +42,7 @@ export function Layout({ children, sidebar, onLoginClick, onAdminClick }: Layout
           <Group>
             <Burger opened={opened} onClick={toggle} hiddenFrom="sm" size="sm" />
             <IconCash size={32} color="var(--mantine-color-violet-6)" />
-            <Title order={3} c="violet">Bills, Bills, Bills!</Title>
+            <Title order={3} c="violet">BillManager</Title>
           </Group>
 
           <Group>
