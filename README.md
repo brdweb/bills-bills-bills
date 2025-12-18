@@ -74,6 +74,60 @@ Learn more at [osaasy.dev](https://osaasy.dev/)
 
 3. **Open your browser** and visit: http://localhost:5000
 
+### Using Your Own PostgreSQL Database
+
+If you already have a PostgreSQL server or prefer to use a managed database service (AWS RDS, DigitalOcean, Supabase, etc.), you can run just the application container:
+
+1. **Create your database** on your PostgreSQL server:
+   ```sql
+   CREATE DATABASE billsdb;
+   CREATE USER billsuser WITH ENCRYPTED PASSWORD 'your-secure-password';
+   GRANT ALL PRIVILEGES ON DATABASE billsdb TO billsuser;
+   ```
+
+2. **Create a simplified `docker-compose.yml`**:
+   ```yaml
+   services:
+     bills-app:
+       image: ghcr.io/brdweb/bills-bills-bills:latest
+       container_name: bills-bills-bills
+       ports:
+         - "5000:5000"
+       restart: unless-stopped
+       environment:
+         - DATABASE_URL=postgresql://billsuser:your-secure-password@your-db-host:5432/billsdb
+         - FLASK_SECRET_KEY=change-this-to-a-secure-random-string
+   ```
+
+3. **Or run with Docker directly**:
+   ```bash
+   docker run -d \
+     --name bills-bills-bills \
+     -p 5000:5000 \
+     -e DATABASE_URL=postgresql://billsuser:your-secure-password@your-db-host:5432/billsdb \
+     -e FLASK_SECRET_KEY=change-this-to-a-secure-random-string \
+     ghcr.io/brdweb/bills-bills-bills:latest
+   ```
+
+**Database URL Format:**
+```
+postgresql://USERNAME:PASSWORD@HOST:PORT/DATABASE
+```
+
+| Component | Example | Description |
+|-----------|---------|-------------|
+| USERNAME | `billsuser` | PostgreSQL username |
+| PASSWORD | `secretpass` | PostgreSQL password (URL-encode special characters) |
+| HOST | `db.example.com` | Database server hostname or IP |
+| PORT | `5432` | PostgreSQL port (default: 5432) |
+| DATABASE | `billsdb` | Database name |
+
+**Examples:**
+- Local: `postgresql://billsuser:pass@localhost:5432/billsdb`
+- Remote: `postgresql://billsuser:pass@db.example.com:5432/billsdb`
+- AWS RDS: `postgresql://billsuser:pass@mydb.abc123.us-east-1.rds.amazonaws.com:5432/billsdb`
+- Supabase: `postgresql://postgres:pass@db.xxxx.supabase.co:5432/postgres`
+
 ### Environment Variables
 
 | Variable | Description | Default |
