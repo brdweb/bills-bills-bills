@@ -21,6 +21,10 @@ from services.stripe_service import (
     create_checkout_session, create_portal_session, construct_webhook_event,
     get_subscription, cancel_subscription, STRIPE_PUBLISHABLE_KEY
 )
+from config import (
+    DEPLOYMENT_MODE, ENABLE_REGISTRATION, REQUIRE_EMAIL_VERIFICATION,
+    ENABLE_BILLING, is_saas, is_self_hosted, get_public_config
+)
 
 # --- JWT Configuration ---
 JWT_SECRET_KEY = os.environ.get('JWT_SECRET_KEY', os.environ.get('FLASK_SECRET_KEY', secrets.token_hex(32)))
@@ -481,6 +485,14 @@ def jwt_login():
     if not user or not user.check_password(password):
         return jsonify({'success': False, 'error': 'Invalid username or password'}), 401
 
+    # Check email verification if required
+    if REQUIRE_EMAIL_VERIFICATION and not user.is_email_verified:
+        return jsonify({
+            'success': False,
+            'error': 'Please verify your email before logging in',
+            'email_verification_required': True
+        }), 403
+
     # Handle password change requirement
     if user.password_change_required:
         token = secrets.token_hex(32)
@@ -574,6 +586,10 @@ def jwt_logout_all():
 @api_v2_bp.route('/auth/register', methods=['POST'])
 def register():
     """Register a new user account."""
+    # Check if registration is enabled
+    if not ENABLE_REGISTRATION:
+        return jsonify({'success': False, 'error': 'Registration is disabled'}), 403
+
     data = request.get_json(force=True, silent=True)
     if not data:
         return jsonify({'success': False, 'error': 'Invalid JSON body'}), 400
@@ -612,11 +628,17 @@ def register():
     user = User(username=username, email=email, role='user')
     user.set_password(password)
 
-    # Generate email verification token
-    token = user.generate_email_verification_token()
+    # For self-hosted mode without email verification, mark as verified
+    if not REQUIRE_EMAIL_VERIFICATION:
+        user.email_verified_at = datetime.datetime.utcnow()
+        token = None
+    else:
+        # Generate email verification token
+        token = user.generate_email_verification_token()
 
-    # Set 14-day trial
-    user.trial_ends_at = datetime.datetime.utcnow() + timedelta(days=14)
+    # Set trial only in SaaS mode with billing
+    if ENABLE_BILLING:
+        user.trial_ends_at = datetime.datetime.utcnow() + timedelta(days=14)
 
     db.session.add(user)
 
@@ -632,23 +654,32 @@ def register():
     # Grant user access to their default database
     user.accessible_databases.append(default_db)
 
-    # Create trial subscription
-    subscription = Subscription(
-        user_id=user.id,
-        status='trialing',
-        trial_ends_at=user.trial_ends_at
-    )
-    db.session.add(subscription)
+    # Create subscription only in SaaS mode with billing
+    if ENABLE_BILLING:
+        subscription = Subscription(
+            user_id=user.id,
+            status='trialing',
+            trial_ends_at=user.trial_ends_at
+        )
+        db.session.add(subscription)
 
     db.session.commit()
 
-    # Send verification email
-    email_sent = send_verification_email(email, token, username)
+    # Send verification email if required
+    email_sent = False
+    if REQUIRE_EMAIL_VERIFICATION and token:
+        email_sent = send_verification_email(email, token, username)
+        message = 'Account created! Please check your email to verify your account.'
+    else:
+        message = 'Account created! You can now log in.'
+        # Send welcome email directly if no verification needed
+        send_welcome_email(email, username)
 
     return jsonify({
         'success': True,
-        'message': 'Account created! Please check your email to verify your account.',
+        'message': message,
         'email_sent': email_sent,
+        'email_verification_required': REQUIRE_EMAIL_VERIFICATION,
         'user': {
             'id': user.id,
             'username': user.username,
@@ -1427,12 +1458,22 @@ def jwt_get_version():
     return jsonify({
         'success': True,
         'data': {
-            'version': '3.1.0',
+            'version': '3.2.0',
             'api_version': 'v2',
             'license': "O'Saasy",
             'license_url': 'https://osaasy.dev/',
+            'deployment_mode': DEPLOYMENT_MODE,
             'features': ['jwt_auth', 'mobile_api', 'enhanced_frequencies', 'auto_payments', 'postgresql_saas', 'row_tenancy']
         }
+    })
+
+
+@api_v2_bp.route('/config', methods=['GET'])
+def get_config():
+    """Return public configuration for frontend."""
+    return jsonify({
+        'success': True,
+        'data': get_public_config()
     })
 
 @api_v2_bp.route('/openapi.yaml', methods=['GET'])

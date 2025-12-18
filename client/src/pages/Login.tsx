@@ -25,6 +25,7 @@ import {
   IconBrandGithub,
 } from '@tabler/icons-react';
 import { useAuth } from '../context/AuthContext';
+import { useConfig } from '../context/ConfigContext';
 import * as api from '../api/client';
 
 function getPasswordStrength(password: string): number {
@@ -48,7 +49,11 @@ function getPasswordColor(strength: number): string {
 export function Login() {
   const navigate = useNavigate();
   const { login } = useAuth();
+  const { config } = useConfig();
   const [activeTab, setActiveTab] = useState<string | null>('login');
+
+  // Check if registration is enabled (defaults to false if config not loaded)
+  const registrationEnabled = config?.registration_enabled ?? false;
 
   // Login state
   const [loginUsername, setLoginUsername] = useState('');
@@ -196,9 +201,9 @@ export function Login() {
 
         <Paper withBorder shadow="xl" p={30} radius="md">
           <Tabs value={activeTab} onChange={setActiveTab}>
-            <Tabs.List grow>
+            <Tabs.List grow={registrationEnabled}>
               <Tabs.Tab value="login">Sign In</Tabs.Tab>
-              <Tabs.Tab value="signup">Sign Up</Tabs.Tab>
+              {registrationEnabled && <Tabs.Tab value="signup">Sign Up</Tabs.Tab>}
             </Tabs.List>
 
             <Tabs.Panel value="login" pt="xl">
@@ -241,6 +246,7 @@ export function Login() {
               </form>
             </Tabs.Panel>
 
+            {registrationEnabled && (
             <Tabs.Panel value="signup" pt="xl">
               <form onSubmit={handleSignup}>
                 <Stack gap="md">
@@ -338,6 +344,7 @@ export function Login() {
                 </Stack>
               </form>
             </Tabs.Panel>
+            )}
           </Tabs>
         </Paper>
 

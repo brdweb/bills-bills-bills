@@ -207,6 +207,22 @@ export const processAutoPayments = () => api.post('/api/process-auto-payments');
 // Version API
 export const getVersion = () => api.get<{ version: string; features: string[] }>('/api/version');
 
+// App Config API (v2)
+export interface AppConfig {
+  deployment_mode: 'saas' | 'self-hosted';
+  billing_enabled: boolean;
+  registration_enabled: boolean;
+  email_verification_required: boolean;
+}
+
+export interface AppConfigResponse {
+  success: boolean;
+  data: AppConfig;
+}
+
+export const getAppConfig = () =>
+  api.get<AppConfigResponse>('/api/v2/config');
+
 // Registration & Auth API (v2)
 export interface RegisterRequest {
   username: string;

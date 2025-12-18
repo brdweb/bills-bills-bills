@@ -1,0 +1,41 @@
+# BillManager - Self-Hosted Docker Compose
+# Copy this file to docker-compose.yml and update the environment variables
+
+services:
+  billmanager:
+    image: ghcr.io/brdweb/billmanager:latest
+    ports:
+      - "5000:5000"
+    environment:
+      # Required - generate with: openssl rand -hex 32
+      - FLASK_SECRET_KEY=change-me-generate-with-openssl
+      - JWT_SECRET_KEY=change-me-generate-with-openssl
+      - DATABASE_URL=postgresql://billsuser:change-me@db:5432/billmanager
+
+      # Deployment mode (self-hosted or saas)
+      - DEPLOYMENT_MODE=self-hosted
+
+      # Registration settings (optional)
+      # - ENABLE_REGISTRATION=true  # Allow public registration
+      # - REQUIRE_EMAIL_VERIFICATION=true  # Require email verification
+
+      # Email settings (optional - for password reset and verification)
+      # - RESEND_API_KEY=re_your_api_key
+      # - FROM_EMAIL=noreply@yourdomain.com
+      # - APP_URL=https://bills.yourdomain.com
+    depends_on:
+      - db
+    restart: unless-stopped
+
+  db:
+    image: postgres:16-alpine
+    environment:
+      - POSTGRES_USER=billsuser
+      - POSTGRES_PASSWORD=change-me  # Match DATABASE_URL password
+      - POSTGRES_DB=billmanager
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    restart: unless-stopped
+
+volumes:
+  postgres_data:

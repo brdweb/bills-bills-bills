@@ -20,6 +20,7 @@ import { ResetPassword } from './pages/ResetPassword';
 import { ResendVerification } from './pages/ResendVerification';
 import { Billing } from './pages/Billing';
 import { useAuth } from './context/AuthContext';
+import { useConfig } from './context/ConfigContext';
 import * as api from './api/client';
 import type { Bill } from './api/client';
 import { archiveBill, unarchiveBill, deleteBillPermanent } from './api/client';
@@ -37,8 +38,12 @@ export interface BillFilter {
 
 function App() {
   const { isLoggedIn, isLoading, pendingPasswordChange, currentDb } = useAuth();
+  const { config } = useConfig();
   const navigate = useNavigate();
   const location = useLocation();
+
+  // Check if billing is enabled (defaults to false if config not loaded)
+  const billingEnabled = config?.billing_enabled ?? false;
 
   // Bills state
   const [bills, setBills] = useState<Bill[]>([]);
@@ -303,7 +308,7 @@ function App() {
                 />
                 <Divider />
                 <Text size="xs" c="dimmed" ta="center">
-                  BillManager v3.1.0 - Licensed under{' '}
+                  BillManager v3.2.0 - Licensed under{' '}
                   <Anchor href="https://osaasy.dev/" target="_blank" size="xs">
                     O'Saasy
                   </Anchor>
@@ -341,9 +346,13 @@ function App() {
             }
           />
           <Route path="/all-payments" element={<AllPayments />} />
-          <Route path="/billing" element={<Billing />} />
-          <Route path="/billing/success" element={<Billing />} />
-          <Route path="/billing/cancel" element={<Billing />} />
+          {billingEnabled && (
+            <>
+              <Route path="/billing" element={<Billing />} />
+              <Route path="/billing/success" element={<Billing />} />
+              <Route path="/billing/cancel" element={<Billing />} />
+            </>
+          )}
         </Routes>
       </Layout>
 
