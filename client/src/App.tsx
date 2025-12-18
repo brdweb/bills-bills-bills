@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Stack, Loader, Center, Divider, Text, Anchor } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
-import { Routes, Route, useNavigate } from 'react-router-dom';
+import { Routes, Route, useNavigate, useLocation, Navigate } from 'react-router-dom';
 import { Layout } from './components/Layout';
 import { Sidebar } from './components/Sidebar';
 import { BillList } from './components/BillList';
@@ -9,11 +9,16 @@ import { BillModal } from './components/BillModal';
 import { PayModal } from './components/PayModal';
 import { PaymentHistory } from './components/PaymentHistory';
 import { Calendar } from './components/Calendar';
-import { LoginModal } from './components/LoginModal';
 import { PasswordChangeModal } from './components/PasswordChangeModal';
 import { AdminModal } from './components/AdminPanel/AdminModal';
 import { MonthlyTotalsChart } from './components/MonthlyTotalsChart';
 import { AllPayments } from './pages/AllPayments';
+import { Login } from './pages/Login';
+import { VerifyEmail } from './pages/VerifyEmail';
+import { ForgotPassword } from './pages/ForgotPassword';
+import { ResetPassword } from './pages/ResetPassword';
+import { ResendVerification } from './pages/ResendVerification';
+import { Billing } from './pages/Billing';
 import { useAuth } from './context/AuthContext';
 import * as api from './api/client';
 import type { Bill } from './api/client';
@@ -30,9 +35,30 @@ export interface BillFilter {
   account: string | null;
 }
 
+// Protected route wrapper
+function ProtectedRoute({ children }: { children: React.ReactNode }) {
+  const { isLoggedIn, isLoading } = useAuth();
+  const location = useLocation();
+
+  if (isLoading) {
+    return (
+      <Center h="100vh">
+        <Loader size="xl" />
+      </Center>
+    );
+  }
+
+  if (!isLoggedIn) {
+    return <Navigate to="/login" state={{ from: location }} replace />;
+  }
+
+  return <>{children}</>;
+}
+
 function App() {
   const { isLoggedIn, isLoading, pendingPasswordChange, currentDb } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
 
   // Bills state
   const [bills, setBills] = useState<Bill[]>([]);
@@ -48,7 +74,6 @@ function App() {
   });
 
   // Modal states
-  const [loginOpened, { open: openLogin, close: closeLogin }] = useDisclosure(false);
   const [adminOpened, { open: openAdmin, close: closeAdmin }] = useDisclosure(false);
   const [billModalOpened, { open: openBillModal, close: closeBillModal }] = useDisclosure(false);
   const [payModalOpened, { open: openPayModal, close: closePayModal }] = useDisclosure(false);
@@ -241,10 +266,37 @@ function App() {
     );
   }
 
+  // Public routes - no authentication required
+  const publicRoutes = ['/login', '/register', '/verify-email', '/forgot-password', '/reset-password', '/resend-verification'];
+  const isPublicRoute = publicRoutes.includes(location.pathname);
+
+  // If not logged in and not on a public route, render just the routes (no Layout)
+  if (!isLoggedIn && !isLoading && !isPublicRoute) {
+    return <Navigate to="/login" replace />;
+  }
+
+  // If logged in and on login page, redirect to home
+  if (isLoggedIn && location.pathname === '/login') {
+    return <Navigate to="/" replace />;
+  }
+
+  // Render public routes without Layout
+  if (isPublicRoute) {
+    return (
+      <Routes>
+        <Route path="/login" element={<Login />} />
+        <Route path="/register" element={<Login />} />
+        <Route path="/verify-email" element={<VerifyEmail />} />
+        <Route path="/forgot-password" element={<ForgotPassword />} />
+        <Route path="/reset-password" element={<ResetPassword />} />
+        <Route path="/resend-verification" element={<ResendVerification />} />
+      </Routes>
+    );
+  }
+
   return (
     <>
       <Layout
-        onLoginClick={openLogin}
         onAdminClick={openAdmin}
         sidebar={
           <Stack gap="xs">
@@ -309,16 +361,13 @@ function App() {
             }
           />
           <Route path="/all-payments" element={<AllPayments />} />
+          <Route path="/billing" element={<Billing />} />
+          <Route path="/billing/success" element={<Billing />} />
+          <Route path="/billing/cancel" element={<Billing />} />
         </Routes>
       </Layout>
 
       {/* Modals */}
-      <LoginModal
-        opened={loginOpened}
-        onClose={closeLogin}
-        onPasswordChangeRequired={() => setPasswordChangeOpened(true)}
-      />
-
       <PasswordChangeModal
         opened={passwordChangeOpened}
         onClose={() => setPasswordChangeOpened(false)}

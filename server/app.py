@@ -14,8 +14,13 @@ from flask_cors import CORS
 from flask_migrate import Migrate
 from sqlalchemy import func, extract, desc
 
-from models import db, User, Database, Bill, Payment, RefreshToken
+from models import db, User, Database, Bill, Payment, RefreshToken, Subscription
 from migration import migrate_sqlite_to_pg
+from services.email import send_verification_email, send_password_reset_email, send_welcome_email
+from services.stripe_service import (
+    create_checkout_session, create_portal_session, construct_webhook_event,
+    get_subscription, cancel_subscription, STRIPE_PUBLISHABLE_KEY
+)
 
 # --- JWT Configuration ---
 JWT_SECRET_KEY = os.environ.get('JWT_SECRET_KEY', os.environ.get('FLASK_SECRET_KEY', secrets.token_hex(32)))
@@ -562,6 +567,444 @@ def jwt_logout_all():
     RefreshToken.query.filter_by(user_id=g.jwt_user_id, revoked=False).update({'revoked': True})
     db.session.commit()
     return jsonify({'success': True, 'message': 'Logged out from all devices'})
+
+
+# --- Registration & Password Reset Endpoints ---
+
+@api_v2_bp.route('/auth/register', methods=['POST'])
+def register():
+    """Register a new user account."""
+    data = request.get_json(force=True, silent=True)
+    if not data:
+        return jsonify({'success': False, 'error': 'Invalid JSON body'}), 400
+
+    username = data.get('username', '').strip().lower()
+    email = data.get('email', '').strip().lower()
+    password = data.get('password', '')
+
+    # Validation
+    errors = []
+    if not username or len(username) < 3:
+        errors.append('Username must be at least 3 characters')
+    if not email or '@' not in email:
+        errors.append('Valid email is required')
+    if not password or len(password) < 8:
+        errors.append('Password must be at least 8 characters')
+
+    # Password strength check
+    if password:
+        has_upper = any(c.isupper() for c in password)
+        has_lower = any(c.islower() for c in password)
+        has_digit = any(c.isdigit() for c in password)
+        if not (has_upper and has_lower and has_digit):
+            errors.append('Password must contain uppercase, lowercase, and a number')
+
+    if errors:
+        return jsonify({'success': False, 'error': errors[0], 'errors': errors}), 400
+
+    # Check if username or email already exists
+    if User.query.filter_by(username=username).first():
+        return jsonify({'success': False, 'error': 'Username already taken'}), 409
+    if User.query.filter_by(email=email).first():
+        return jsonify({'success': False, 'error': 'Email already registered'}), 409
+
+    # Create user
+    user = User(username=username, email=email, role='user')
+    user.set_password(password)
+
+    # Generate email verification token
+    token = user.generate_email_verification_token()
+
+    # Set 14-day trial
+    user.trial_ends_at = datetime.datetime.utcnow() + timedelta(days=14)
+
+    db.session.add(user)
+
+    # Create a default "Personal" database for the user
+    default_db = Database(
+        name=f"{username}_personal",
+        display_name="Personal Finances",
+        description="Your personal finance tracker"
+    )
+    db.session.add(default_db)
+    db.session.flush()  # Get the IDs
+
+    # Grant user access to their default database
+    user.accessible_databases.append(default_db)
+
+    # Create trial subscription
+    subscription = Subscription(
+        user_id=user.id,
+        status='trialing',
+        trial_ends_at=user.trial_ends_at
+    )
+    db.session.add(subscription)
+
+    db.session.commit()
+
+    # Send verification email
+    email_sent = send_verification_email(email, token, username)
+
+    return jsonify({
+        'success': True,
+        'message': 'Account created! Please check your email to verify your account.',
+        'email_sent': email_sent,
+        'user': {
+            'id': user.id,
+            'username': user.username,
+            'email': user.email
+        }
+    }), 201
+
+
+@api_v2_bp.route('/auth/verify-email', methods=['POST'])
+def verify_email():
+    """Verify email address with token."""
+    data = request.get_json(force=True, silent=True)
+    if not data:
+        return jsonify({'success': False, 'error': 'Invalid JSON body'}), 400
+
+    token = data.get('token', '')
+    if not token:
+        return jsonify({'success': False, 'error': 'Token required'}), 400
+
+    # Find user with this token
+    user = User.query.filter_by(email_verification_token=token).first()
+    if not user:
+        return jsonify({'success': False, 'error': 'Invalid or expired token'}), 400
+
+    if not user.verify_email_token(token):
+        return jsonify({'success': False, 'error': 'Token expired'}), 400
+
+    # Mark email as verified
+    user.email_verified_at = datetime.datetime.utcnow()
+    user.email_verification_token = None
+    user.email_verification_expires = None
+    db.session.commit()
+
+    # Send welcome email
+    send_welcome_email(user.email, user.username)
+
+    return jsonify({
+        'success': True,
+        'message': 'Email verified successfully! You can now log in.'
+    })
+
+
+@api_v2_bp.route('/auth/resend-verification', methods=['POST'])
+def resend_verification():
+    """Resend email verification link."""
+    data = request.get_json(force=True, silent=True)
+    if not data:
+        return jsonify({'success': False, 'error': 'Invalid JSON body'}), 400
+
+    email = data.get('email', '').strip().lower()
+    if not email:
+        return jsonify({'success': False, 'error': 'Email required'}), 400
+
+    user = User.query.filter_by(email=email).first()
+
+    # Always return success to prevent email enumeration
+    if not user or user.is_email_verified:
+        return jsonify({'success': True, 'message': 'If this email exists and is unverified, a new link has been sent.'})
+
+    # Generate new token
+    token = user.generate_email_verification_token()
+    db.session.commit()
+
+    # Send verification email
+    send_verification_email(email, token, user.username)
+
+    return jsonify({'success': True, 'message': 'If this email exists and is unverified, a new link has been sent.'})
+
+
+@api_v2_bp.route('/auth/forgot-password', methods=['POST'])
+def forgot_password():
+    """Request password reset email."""
+    data = request.get_json(force=True, silent=True)
+    if not data:
+        return jsonify({'success': False, 'error': 'Invalid JSON body'}), 400
+
+    email = data.get('email', '').strip().lower()
+    if not email:
+        return jsonify({'success': False, 'error': 'Email required'}), 400
+
+    user = User.query.filter_by(email=email).first()
+
+    # Always return success to prevent email enumeration
+    if not user:
+        return jsonify({'success': True, 'message': 'If this email is registered, a reset link has been sent.'})
+
+    # Generate reset token
+    token = user.generate_password_reset_token()
+    db.session.commit()
+
+    # Send password reset email
+    send_password_reset_email(email, token, user.username)
+
+    return jsonify({'success': True, 'message': 'If this email is registered, a reset link has been sent.'})
+
+
+@api_v2_bp.route('/auth/reset-password', methods=['POST'])
+def reset_password():
+    """Reset password with token."""
+    data = request.get_json(force=True, silent=True)
+    if not data:
+        return jsonify({'success': False, 'error': 'Invalid JSON body'}), 400
+
+    token = data.get('token', '')
+    new_password = data.get('password', '')
+
+    if not token:
+        return jsonify({'success': False, 'error': 'Token required'}), 400
+    if not new_password or len(new_password) < 8:
+        return jsonify({'success': False, 'error': 'Password must be at least 8 characters'}), 400
+
+    # Password strength check
+    has_upper = any(c.isupper() for c in new_password)
+    has_lower = any(c.islower() for c in new_password)
+    has_digit = any(c.isdigit() for c in new_password)
+    if not (has_upper and has_lower and has_digit):
+        return jsonify({'success': False, 'error': 'Password must contain uppercase, lowercase, and a number'}), 400
+
+    # Find user with this token
+    user = User.query.filter_by(password_reset_token=token).first()
+    if not user:
+        return jsonify({'success': False, 'error': 'Invalid or expired token'}), 400
+
+    if not user.verify_password_reset_token(token):
+        return jsonify({'success': False, 'error': 'Token expired'}), 400
+
+    # Update password
+    user.set_password(new_password)
+    user.password_reset_token = None
+    user.password_reset_expires = None
+    user.password_change_required = False
+
+    # Revoke all refresh tokens for security
+    RefreshToken.query.filter_by(user_id=user.id, revoked=False).update({'revoked': True})
+
+    db.session.commit()
+
+    return jsonify({
+        'success': True,
+        'message': 'Password reset successfully! You can now log in with your new password.'
+    })
+
+
+# --- Billing Endpoints ---
+
+@api_v2_bp.route('/billing/config', methods=['GET'])
+def billing_config():
+    """Get Stripe publishable key for frontend."""
+    return jsonify({
+        'success': True,
+        'publishable_key': STRIPE_PUBLISHABLE_KEY
+    })
+
+
+@api_v2_bp.route('/billing/create-checkout', methods=['POST'])
+@jwt_required
+def create_checkout():
+    """Create a Stripe Checkout session for subscription."""
+    user = User.query.get(g.jwt_user_id)
+    if not user:
+        return jsonify({'success': False, 'error': 'User not found'}), 404
+
+    # Check if user already has active subscription
+    if user.subscription and user.subscription.is_active:
+        return jsonify({'success': False, 'error': 'You already have an active subscription'}), 400
+
+    # Get or create customer ID
+    customer_id = None
+    if user.subscription and user.subscription.stripe_customer_id:
+        customer_id = user.subscription.stripe_customer_id
+
+    result = create_checkout_session(user.id, user.email, customer_id)
+
+    if 'error' in result:
+        return jsonify({'success': False, 'error': result['error']}), 400
+
+    # Save customer ID if new
+    if result.get('customer_id') and not customer_id:
+        if not user.subscription:
+            subscription = Subscription(user_id=user.id, status='pending')
+            db.session.add(subscription)
+        else:
+            subscription = user.subscription
+        subscription.stripe_customer_id = result['customer_id']
+        db.session.commit()
+
+    return jsonify({
+        'success': True,
+        'url': result['url'],
+        'session_id': result['session_id']
+    })
+
+
+@api_v2_bp.route('/billing/portal', methods=['POST'])
+@jwt_required
+def billing_portal():
+    """Create a Stripe Customer Portal session for subscription management."""
+    user = User.query.get(g.jwt_user_id)
+    if not user:
+        return jsonify({'success': False, 'error': 'User not found'}), 404
+
+    if not user.subscription or not user.subscription.stripe_customer_id:
+        return jsonify({'success': False, 'error': 'No subscription found'}), 404
+
+    result = create_portal_session(user.subscription.stripe_customer_id)
+
+    if 'error' in result:
+        return jsonify({'success': False, 'error': result['error']}), 400
+
+    return jsonify({
+        'success': True,
+        'url': result['url']
+    })
+
+
+@api_v2_bp.route('/billing/status', methods=['GET'])
+@jwt_required
+def billing_status():
+    """Get current subscription status."""
+    user = User.query.get(g.jwt_user_id)
+    if not user:
+        return jsonify({'success': False, 'error': 'User not found'}), 404
+
+    subscription = user.subscription
+
+    if not subscription:
+        return jsonify({
+            'success': True,
+            'data': {
+                'status': 'none',
+                'has_subscription': False,
+                'is_active': False,
+                'is_trialing': False,
+                'trial_ends_at': user.trial_ends_at.isoformat() if user.trial_ends_at else None
+            }
+        })
+
+    return jsonify({
+        'success': True,
+        'data': {
+            'status': subscription.status,
+            'has_subscription': True,
+            'is_active': subscription.is_active,
+            'is_trialing': subscription.is_trialing,
+            'plan': subscription.plan,
+            'trial_ends_at': subscription.trial_ends_at.isoformat() if subscription.trial_ends_at else None,
+            'current_period_end': subscription.current_period_end.isoformat() if subscription.current_period_end else None,
+            'days_until_renewal': subscription.days_until_renewal
+        }
+    })
+
+
+@api_v2_bp.route('/webhooks/stripe', methods=['POST'])
+def stripe_webhook():
+    """Handle Stripe webhook events."""
+    payload = request.get_data()
+    sig_header = request.headers.get('Stripe-Signature')
+
+    if not sig_header:
+        return jsonify({'error': 'Missing signature'}), 400
+
+    event = construct_webhook_event(payload, sig_header)
+
+    if isinstance(event, dict) and 'error' in event:
+        return jsonify({'error': event['error']}), 400
+
+    event_type = event.get('type')
+    data = event.get('data', {}).get('object', {})
+
+    logger.info(f"Stripe webhook received: {event_type}")
+
+    try:
+        if event_type == 'checkout.session.completed':
+            # Payment successful, activate subscription
+            user_id = data.get('metadata', {}).get('user_id')
+            customer_id = data.get('customer')
+            subscription_id = data.get('subscription')
+
+            if user_id:
+                user = User.query.get(int(user_id))
+                if user:
+                    if not user.subscription:
+                        subscription = Subscription(user_id=user.id)
+                        db.session.add(subscription)
+                    else:
+                        subscription = user.subscription
+
+                    subscription.stripe_customer_id = customer_id
+                    subscription.stripe_subscription_id = subscription_id
+                    subscription.status = 'active'
+                    subscription.plan = 'early_adopter'
+
+                    # Get subscription details from Stripe
+                    sub_details = get_subscription(subscription_id)
+                    if 'error' not in sub_details:
+                        subscription.current_period_start = datetime.datetime.fromtimestamp(sub_details['current_period_start'])
+                        subscription.current_period_end = datetime.datetime.fromtimestamp(sub_details['current_period_end'])
+
+                    db.session.commit()
+                    logger.info(f"Subscription activated for user {user_id}")
+
+        elif event_type == 'invoice.paid':
+            # Recurring payment successful
+            subscription_id = data.get('subscription')
+            if subscription_id:
+                subscription = Subscription.query.filter_by(stripe_subscription_id=subscription_id).first()
+                if subscription:
+                    subscription.status = 'active'
+                    sub_details = get_subscription(subscription_id)
+                    if 'error' not in sub_details:
+                        subscription.current_period_start = datetime.datetime.fromtimestamp(sub_details['current_period_start'])
+                        subscription.current_period_end = datetime.datetime.fromtimestamp(sub_details['current_period_end'])
+                    db.session.commit()
+                    logger.info(f"Subscription renewed for subscription {subscription_id}")
+
+        elif event_type == 'invoice.payment_failed':
+            # Payment failed
+            subscription_id = data.get('subscription')
+            if subscription_id:
+                subscription = Subscription.query.filter_by(stripe_subscription_id=subscription_id).first()
+                if subscription:
+                    subscription.status = 'past_due'
+                    db.session.commit()
+                    logger.warning(f"Payment failed for subscription {subscription_id}")
+
+        elif event_type == 'customer.subscription.deleted':
+            # Subscription canceled
+            subscription_id = data.get('id')
+            if subscription_id:
+                subscription = Subscription.query.filter_by(stripe_subscription_id=subscription_id).first()
+                if subscription:
+                    subscription.status = 'canceled'
+                    subscription.canceled_at = datetime.datetime.utcnow()
+                    db.session.commit()
+                    logger.info(f"Subscription canceled: {subscription_id}")
+
+        elif event_type == 'customer.subscription.updated':
+            # Subscription updated (status change, etc.)
+            subscription_id = data.get('id')
+            status = data.get('status')
+            if subscription_id:
+                subscription = Subscription.query.filter_by(stripe_subscription_id=subscription_id).first()
+                if subscription:
+                    subscription.status = status
+                    if data.get('cancel_at_period_end'):
+                        subscription.canceled_at = datetime.datetime.utcnow()
+                    db.session.commit()
+                    logger.info(f"Subscription updated: {subscription_id} -> {status}")
+
+    except Exception as e:
+        logger.error(f"Webhook processing error: {e}")
+        # Return 200 anyway to prevent Stripe retries
+        return jsonify({'received': True, 'error': str(e)}), 200
+
+    return jsonify({'received': True}), 200
+
 
 @api_v2_bp.route('/me', methods=['GET'])
 @jwt_required

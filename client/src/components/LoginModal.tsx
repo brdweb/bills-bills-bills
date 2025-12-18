@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Link } from 'react-router-dom';
 import {
   Modal,
   TextInput,
@@ -6,6 +7,9 @@ import {
   Button,
   Stack,
   Alert,
+  Text,
+  Anchor,
+  Divider,
 } from '@mantine/core';
 import { IconUser, IconLock, IconAlertCircle, IconAlertTriangle } from '@tabler/icons-react';
 import { useAuth } from '../context/AuthContext';
@@ -124,6 +128,25 @@ export function LoginModal({ opened, onClose, onPasswordChangeRequired }: LoginM
           <Button type="submit" fullWidth loading={loading}>
             Login
           </Button>
+
+          <Anchor
+            component={Link}
+            to="/forgot-password"
+            size="sm"
+            ta="center"
+            onClick={onClose}
+          >
+            Forgot your password?
+          </Anchor>
+
+          <Divider label="or" labelPosition="center" />
+
+          <Text size="sm" ta="center">
+            Don&apos;t have an account?{' '}
+            <Anchor component={Link} to="/register" onClick={onClose}>
+              Sign up
+            </Anchor>
+          </Text>
         </Stack>
       </form>
     </Modal>

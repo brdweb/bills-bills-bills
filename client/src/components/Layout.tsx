@@ -16,11 +16,10 @@ import type { ReactNode } from 'react';
 interface LayoutProps {
   children: ReactNode;
   sidebar: ReactNode;
-  onLoginClick: () => void;
   onAdminClick: () => void;
 }
 
-export function Layout({ children, sidebar, onLoginClick, onAdminClick }: LayoutProps) {
+export function Layout({ children, sidebar, onAdminClick }: LayoutProps) {
   const { colorScheme, toggleColorScheme } = useMantineColorScheme();
   const [opened, { toggle }] = useDisclosure();
   const { isLoggedIn, isAdmin, databases, currentDb, selectDatabase, logout } = useAuth();
@@ -69,7 +68,7 @@ export function Layout({ children, sidebar, onLoginClick, onAdminClick }: Layout
               {colorScheme === 'dark' ? <IconSun size={20} /> : <IconMoon size={20} />}
             </ActionIcon>
 
-            {isLoggedIn ? (
+            {isLoggedIn && (
               <Group gap="xs">
                 {isAdmin && (
                   <Button
@@ -92,10 +91,6 @@ export function Layout({ children, sidebar, onLoginClick, onAdminClick }: Layout
                   Logout
                 </Button>
               </Group>
-            ) : (
-              <Button variant="filled" size="sm" onClick={onLoginClick}>
-                Login
-              </Button>
             )}
           </Group>
         </Group>

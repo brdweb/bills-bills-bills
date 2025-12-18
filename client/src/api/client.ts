@@ -207,4 +207,67 @@ export const processAutoPayments = () => api.post('/api/process-auto-payments');
 // Version API
 export const getVersion = () => api.get<{ version: string; features: string[] }>('/api/version');
 
+// Registration & Auth API (v2)
+export interface RegisterRequest {
+  username: string;
+  email: string;
+  password: string;
+}
+
+export interface AuthResponse {
+  success: boolean;
+  message?: string;
+  error?: string;
+}
+
+export const register = (data: RegisterRequest) =>
+  api.post<AuthResponse>('/api/v2/auth/register', data);
+
+export const verifyEmail = (token: string) =>
+  api.post<AuthResponse>('/api/v2/auth/verify-email', { token });
+
+export const resendVerification = (email: string) =>
+  api.post<AuthResponse>('/api/v2/auth/resend-verification', { email });
+
+export const forgotPassword = (email: string) =>
+  api.post<AuthResponse>('/api/v2/auth/forgot-password', { email });
+
+export const resetPassword = (token: string, password: string) =>
+  api.post<AuthResponse>('/api/v2/auth/reset-password', { token, password });
+
+// Billing API (v2)
+export interface BillingConfig {
+  publishable_key: string;
+  enabled: boolean;
+}
+
+export interface SubscriptionStatus {
+  has_subscription: boolean;
+  status?: string;
+  plan?: string;
+  trial_ends_at?: string;
+  current_period_end?: string;
+  cancel_at_period_end?: boolean;
+  in_trial?: boolean;
+  trial_days_remaining?: number;
+}
+
+export interface CheckoutResponse {
+  success: boolean;
+  url?: string;
+  error?: string;
+}
+
+export const getBillingConfig = () =>
+  api.get<BillingConfig>('/api/v2/billing/config');
+
+export const getSubscriptionStatus = () =>
+  api.get<SubscriptionStatus>('/api/v2/billing/status');
+
+export const createCheckoutSession = () =>
+  api.post<CheckoutResponse>('/api/v2/billing/create-checkout');
+
+export const createPortalSession = () =>
+  api.post<CheckoutResponse>('/api/v2/billing/portal');
+
 export default api;

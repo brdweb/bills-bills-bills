@@ -34,3 +34,7 @@ GEMINI.md
 # Test files
 test_*.py
 marketing/
+
+# Environment files (contain secrets)
+.env
+*.env.local
