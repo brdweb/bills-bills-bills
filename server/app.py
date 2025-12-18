@@ -136,7 +136,6 @@ def databases_handler():
 @admin_required
 def delete_database(db_id):
     target_db = Database.query.get_or_404(db_id)
-    if target_db.name == 'personal': return jsonify({'error': 'Protected'}), 400
     db.session.delete(target_db); db.session.commit(); return jsonify({'message': 'Deleted'})
 
 @api_bp.route('/databases/<int:db_id>/access', methods=['GET', 'POST'])
