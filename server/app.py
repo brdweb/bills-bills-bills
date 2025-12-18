@@ -1564,17 +1564,21 @@ def create_app():
             logger.info("🗺️  Registered Routes:")
             for rule in app.url_map.iter_rules(): logger.info(f"    {rule.methods} {rule.rule} -> {rule.endpoint}")
             db.create_all(); migrate_sqlite_to_pg(app)
-            admin = User.query.filter_by(username='admin').first()
-            if not admin:
+
+            # First-run detection: only create defaults if NO users exist
+            user_count = User.query.count()
+            if user_count == 0:
+                logger.info("🚀 First run detected - creating default admin and database")
                 admin = User(username='admin', role='admin', password_change_required=True)
                 admin.set_password('password'); db.session.add(admin)
-            p_db = Database.query.filter_by(name='personal').first()
-            if not p_db:
                 p_db = Database(name='personal', display_name='Personal Finances', description='Personal bills and expenses')
                 db.session.add(p_db)
-            db.session.commit()
-            if p_db not in admin.accessible_databases:
-                admin.accessible_databases.append(p_db); db.session.commit()
+                db.session.flush()  # Get IDs before linking
+                admin.accessible_databases.append(p_db)
+                db.session.commit()
+                logger.info("✅ Default admin (username: admin, password: password) and database created")
+            else:
+                logger.info(f"📦 Existing installation detected ({user_count} users) - skipping default creation")
         except Exception as e: logger.error(f"❌ Startup Error: {e}")
     return app
 
