@@ -35,26 +35,6 @@ export interface BillFilter {
   account: string | null;
 }
 
-// Protected route wrapper
-function ProtectedRoute({ children }: { children: React.ReactNode }) {
-  const { isLoggedIn, isLoading } = useAuth();
-  const location = useLocation();
-
-  if (isLoading) {
-    return (
-      <Center h="100vh">
-        <Loader size="xl" />
-      </Center>
-    );
-  }
-
-  if (!isLoggedIn) {
-    return <Navigate to="/login" state={{ from: location }} replace />;
-  }
-
-  return <>{children}</>;
-}
-
 function App() {
   const { isLoggedIn, isLoading, pendingPasswordChange, currentDb } = useAuth();
   const navigate = useNavigate();
