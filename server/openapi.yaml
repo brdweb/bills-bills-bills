@@ -1,0 +1,847 @@
+openapi: 3.0.3
+info:
+  title: Bills Bills Bills API
+  description: |
+    REST API for Bills Bills Bills - a multi-tenant bill tracking application.
+
+    ## Authentication
+
+    API v2 uses JWT (JSON Web Token) authentication:
+    1. Call `/api/v2/auth/login` with username/password to get tokens
+    2. Include `Authorization: Bearer <access_token>` header in requests
+    3. Include `X-Database: <database_name>` header to select workspace
+    4. Use `/api/v2/auth/refresh` to get new access tokens when expired
+
+    Access tokens expire after 15 minutes. Refresh tokens expire after 7 days.
+
+  version: 3.1.0
+  license:
+    name: O'Saasy License
+    url: https://osaasy.dev/
+  contact:
+    name: Bills Bills Bills
+    url: https://github.com/brdweb/bills-bills-bills
+
+servers:
+  - url: /api/v2
+    description: API v2 (JWT Authentication)
+
+tags:
+  - name: Authentication
+    description: Login, logout, and token management
+  - name: Bills
+    description: Bill management operations
+  - name: Payments
+    description: Payment recording and history
+  - name: Statistics
+    description: Analytics and reporting
+  - name: Utilities
+    description: Helper endpoints
+
+paths:
+  /auth/login:
+    post:
+      tags: [Authentication]
+      summary: Login and get JWT tokens
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [username, password]
+              properties:
+                username:
+                  type: string
+                  example: admin
+                password:
+                  type: string
+                  example: password123
+                device_info:
+                  type: string
+                  description: Optional device identifier for token management
+                  example: "iPhone 15 Pro"
+      responses:
+        '200':
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginResponse'
+        '401':
+          description: Invalid credentials
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Password change required
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  error:
+                    type: string
+                    example: "Password change required"
+                  require_password_change:
+                    type: boolean
+                    example: true
+                  change_token:
+                    type: string
+
+  /auth/refresh:
+    post:
+      tags: [Authentication]
+      summary: Refresh access token
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [refresh_token]
+              properties:
+                refresh_token:
+                  type: string
+      responses:
+        '200':
+          description: New access token
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      access_token:
+                        type: string
+                      expires_in:
+                        type: integer
+                        example: 900
+                      token_type:
+                        type: string
+                        example: Bearer
+        '401':
+          description: Invalid or expired refresh token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /auth/logout:
+    post:
+      tags: [Authentication]
+      summary: Logout and revoke refresh token
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                refresh_token:
+                  type: string
+      responses:
+        '200':
+          description: Logout successful
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+
+  /auth/logout-all:
+    post:
+      tags: [Authentication]
+      summary: Logout from all devices
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: All sessions revoked
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+
+  /auth/change-password:
+    post:
+      tags: [Authentication]
+      summary: Change password using change token
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [change_token, new_password]
+              properties:
+                change_token:
+                  type: string
+                new_password:
+                  type: string
+                  minLength: 8
+                device_info:
+                  type: string
+      responses:
+        '200':
+          description: Password changed, returns new tokens
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginResponse'
+
+  /me:
+    get:
+      tags: [Authentication]
+      summary: Get current user info
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: User information
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+                    properties:
+                      id:
+                        type: integer
+                      username:
+                        type: string
+                      role:
+                        type: string
+                        enum: [admin, user]
+                      databases:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/DatabaseInfo'
+                      current_db:
+                        type: string
+                        nullable: true
+
+  /bills:
+    get:
+      tags: [Bills]
+      summary: List all bills
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/XDatabase'
+        - name: include_archived
+          in: query
+          schema:
+            type: boolean
+            default: false
+      responses:
+        '200':
+          description: List of bills
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Bill'
+    post:
+      tags: [Bills]
+      summary: Create a new bill
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/XDatabase'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BillInput'
+      responses:
+        '201':
+          description: Bill created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+                    properties:
+                      id:
+                        type: integer
+                      message:
+                        type: string
+
+  /bills/{bill_id}:
+    get:
+      tags: [Bills]
+      summary: Get a single bill
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/XDatabase'
+        - $ref: '#/components/parameters/BillId'
+      responses:
+        '200':
+          description: Bill details
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    $ref: '#/components/schemas/Bill'
+    put:
+      tags: [Bills]
+      summary: Update a bill
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/XDatabase'
+        - $ref: '#/components/parameters/BillId'
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BillInput'
+      responses:
+        '200':
+          description: Bill updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+    delete:
+      tags: [Bills]
+      summary: Archive a bill
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/XDatabase'
+        - $ref: '#/components/parameters/BillId'
+      responses:
+        '200':
+          description: Bill archived
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+
+  /bills/{bill_id}/unarchive:
+    post:
+      tags: [Bills]
+      summary: Unarchive a bill
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/XDatabase'
+        - $ref: '#/components/parameters/BillId'
+      responses:
+        '200':
+          description: Bill unarchived
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+
+  /bills/{bill_id}/permanent:
+    delete:
+      tags: [Bills]
+      summary: Permanently delete a bill
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/XDatabase'
+        - $ref: '#/components/parameters/BillId'
+      responses:
+        '200':
+          description: Bill permanently deleted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+
+  /bills/{bill_id}/pay:
+    post:
+      tags: [Payments]
+      summary: Record a payment for a bill
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/XDatabase'
+        - $ref: '#/components/parameters/BillId'
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                amount:
+                  type: number
+                  description: Payment amount (defaults to bill amount)
+                payment_date:
+                  type: string
+                  format: date
+                  description: Payment date (defaults to today)
+                notes:
+                  type: string
+                advance_due:
+                  type: boolean
+                  default: true
+                  description: Advance due date to next occurrence
+      responses:
+        '200':
+          description: Payment recorded
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+                    properties:
+                      id:
+                        type: integer
+                      message:
+                        type: string
+
+  /bills/{bill_id}/payments:
+    get:
+      tags: [Payments]
+      summary: Get payment history for a bill
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/XDatabase'
+        - $ref: '#/components/parameters/BillId'
+      responses:
+        '200':
+          description: Payment history
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Payment'
+
+  /payments:
+    get:
+      tags: [Payments]
+      summary: Get all payments across all bills
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/XDatabase'
+      responses:
+        '200':
+          description: All payments
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/PaymentWithBill'
+
+  /payments/{payment_id}:
+    put:
+      tags: [Payments]
+      summary: Update a payment
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/XDatabase'
+        - name: payment_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                amount:
+                  type: number
+                payment_date:
+                  type: string
+                  format: date
+                notes:
+                  type: string
+      responses:
+        '200':
+          description: Payment updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+    delete:
+      tags: [Payments]
+      summary: Delete a payment
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/XDatabase'
+        - name: payment_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Payment deleted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+
+  /accounts:
+    get:
+      tags: [Utilities]
+      summary: Get list of account names
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/XDatabase'
+      responses:
+        '200':
+          description: List of account names
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      type: string
+                    example: ["Chase Checking", "Capital One", "Cash"]
+
+  /stats/monthly:
+    get:
+      tags: [Statistics]
+      summary: Get monthly payment totals
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/XDatabase'
+      responses:
+        '200':
+          description: Monthly statistics
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+                    additionalProperties:
+                      type: object
+                      properties:
+                        expenses:
+                          type: number
+                        deposits:
+                          type: number
+                    example:
+                      "2024-01": {"expenses": 1500.00, "deposits": 3000.00}
+                      "2024-02": {"expenses": 1200.00, "deposits": 3000.00}
+
+  /process-auto-payments:
+    post:
+      tags: [Utilities]
+      summary: Process auto-payments for due bills
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/XDatabase'
+      responses:
+        '200':
+          description: Auto-payments processed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+                    properties:
+                      processed_count:
+                        type: integer
+                      bills:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            bill_id:
+                              type: integer
+                            name:
+                              type: string
+                            amount:
+                              type: number
+
+  /version:
+    get:
+      tags: [Utilities]
+      summary: Get API version info
+      responses:
+        '200':
+          description: Version information
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+                    properties:
+                      version:
+                        type: string
+                        example: "3.1.0"
+                      api_version:
+                        type: string
+                        example: "v2"
+                      license:
+                        type: string
+                      license_url:
+                        type: string
+                      features:
+                        type: array
+                        items:
+                          type: string
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  parameters:
+    XDatabase:
+      name: X-Database
+      in: header
+      required: true
+      description: Database/workspace name to operate on
+      schema:
+        type: string
+        example: personal
+    BillId:
+      name: bill_id
+      in: path
+      required: true
+      schema:
+        type: integer
+
+  schemas:
+    ErrorResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: false
+        error:
+          type: string
+
+    SuccessResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          type: object
+          properties:
+            message:
+              type: string
+
+    LoginResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          type: object
+          properties:
+            access_token:
+              type: string
+            refresh_token:
+              type: string
+            expires_in:
+              type: integer
+              example: 900
+            token_type:
+              type: string
+              example: Bearer
+            user:
+              type: object
+              properties:
+                id:
+                  type: integer
+                username:
+                  type: string
+                role:
+                  type: string
+            databases:
+              type: array
+              items:
+                $ref: '#/components/schemas/DatabaseInfo'
+
+    DatabaseInfo:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        display_name:
+          type: string
+
+    Bill:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        amount:
+          type: number
+          nullable: true
+        varies:
+          type: boolean
+        avg_amount:
+          type: number
+          description: Average payment amount (only for variable bills)
+        frequency:
+          type: string
+          enum: [weekly, bi-weekly, monthly, quarterly, yearly, custom]
+        frequency_type:
+          type: string
+          enum: [simple, specific_dates, multiple_weekly]
+        frequency_config:
+          type: string
+          description: JSON configuration for complex frequencies
+        next_due:
+          type: string
+          format: date
+        auto_payment:
+          type: boolean
+        icon:
+          type: string
+        type:
+          type: string
+          enum: [expense, deposit]
+        account:
+          type: string
+          nullable: true
+        notes:
+          type: string
+          nullable: true
+        archived:
+          type: boolean
+
+    BillInput:
+      type: object
+      required: [name, next_due]
+      properties:
+        name:
+          type: string
+        amount:
+          type: number
+        varies:
+          type: boolean
+          default: false
+        frequency:
+          type: string
+          default: monthly
+        frequency_type:
+          type: string
+          default: simple
+        frequency_config:
+          type: string
+          default: "{}"
+        next_due:
+          type: string
+          format: date
+        auto_payment:
+          type: boolean
+          default: false
+        icon:
+          type: string
+          default: payment
+        type:
+          type: string
+          enum: [expense, deposit]
+          default: expense
+        account:
+          type: string
+        notes:
+          type: string
+
+    Payment:
+      type: object
+      properties:
+        id:
+          type: integer
+        amount:
+          type: number
+        payment_date:
+          type: string
+          format: date
+        notes:
+          type: string
+          nullable: true
+
+    PaymentWithBill:
+      allOf:
+        - $ref: '#/components/schemas/Payment'
+        - type: object
+          properties:
+            bill_id:
+              type: integer
+            bill_name:
+              type: string
+            bill_icon:
+              type: string
+            bill_type:
+              type: string
+              enum: [expense, deposit]

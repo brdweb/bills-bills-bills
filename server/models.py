@@ -74,3 +74,20 @@ class Payment(db.Model):
     payment_date = db.Column(db.String(10), nullable=False) # YYYY-MM-DD
     notes = db.Column(db.Text)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+
+class RefreshToken(db.Model):
+    """Stores refresh tokens for JWT authentication (mobile apps)"""
+    __tablename__ = 'refresh_tokens'
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    token_hash = db.Column(db.String(64), nullable=False, unique=True)
+    expires_at = db.Column(db.DateTime, nullable=False)
+    revoked = db.Column(db.Boolean, default=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    # Track device/client info for token management
+    device_info = db.Column(db.String(255), nullable=True)
+
+    # Relationship
+    user = db.relationship('User', backref=db.backref('refresh_tokens', lazy=True))
