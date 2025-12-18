@@ -4,6 +4,8 @@ const api = axios.create({
   timeout: 10000,
   headers: {
     'Content-Type': 'application/json',
+    'Cache-Control': 'no-cache, no-store, must-revalidate',
+    'Pragma': 'no-cache',
   },
   withCredentials: true,
 });
@@ -182,8 +184,8 @@ export const payBill = (id: number, amount: number, advance_due: boolean) =>
   api.post(`/bills/${id}/pay`, { amount, advance_due });
 
 // Payments API
-export const getPayments = (billName: string) =>
-  api.get<Payment[]>(`/bills/${encodeURIComponent(billName)}/payments`);
+export const getPayments = (billId: number) =>
+  api.get<Payment[]>(`/bills/${billId}/payments`);
 
 export const updatePayment = (id: number, amount: number, payment_date: string) =>
   api.put(`/payments/${id}`, { amount, payment_date });

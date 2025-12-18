@@ -1,3 +1,6 @@
 flask==3.1.2
 flask-cors==6.0.1
 gunicorn==23.0.0
+flask-sqlalchemy==3.1.1
+psycopg2-binary==2.9.9
+flask-migrate==4.0.7

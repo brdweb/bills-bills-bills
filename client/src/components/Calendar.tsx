@@ -156,11 +156,13 @@ export function Calendar({ bills, selectedDate, onDateSelect }: CalendarProps) {
                       variant="filled"
                       style={{
                         position: 'absolute',
-                        top: 2,
-                        right: 2,
-                        fontSize: 8,
-                        padding: '0 4px',
+                        top: -4,
+                        right: -4,
+                        fontSize: 7,
+                        padding: '0 3px',
                         minWidth: 'auto',
+                        height: 14,
+                        lineHeight: '14px',
                       }}
                     >
                       {billCount}

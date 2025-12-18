@@ -21,6 +21,7 @@ import { PaymentHistoryChart } from './PaymentHistoryChart';
 interface PaymentHistoryProps {
   opened: boolean;
   onClose: () => void;
+  billId: number | null;
   billName: string | null;
   onPaymentsChanged: () => void;
 }
@@ -28,6 +29,7 @@ interface PaymentHistoryProps {
 export function PaymentHistory({
   opened,
   onClose,
+  billId,
   billName,
   onPaymentsChanged,
 }: PaymentHistoryProps) {
@@ -38,16 +40,16 @@ export function PaymentHistory({
   const [editDate, setEditDate] = useState<Date | null>(null);
 
   useEffect(() => {
-    if (opened && billName) {
+    if (opened && billId) {
       fetchPayments();
     }
-  }, [opened, billName]);
+  }, [opened, billId]);
 
   const fetchPayments = async () => {
-    if (!billName) return;
+    if (!billId) return;
     setLoading(true);
     try {
-      const response = await getPayments(billName);
+      const response = await getPayments(billId);
       setPayments(response.data);
     } catch (error) {
       console.error('Failed to fetch payments:', error);

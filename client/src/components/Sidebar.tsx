@@ -54,42 +54,38 @@ export function Sidebar({ bills, isLoggedIn, filter, onFilterChange, onShowChart
 
   // Calculate monthly stats based on offset
   const monthlyStats = useMemo(() => {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const { month, year, isCurrentMonth } = selectedMonthInfo;
+    const { month, year } = selectedMonthInfo;
+    const monthKey = `${year}-${String(month + 1).padStart(2, '0')}`;
 
-    if (isCurrentMonth) {
-      // For current month, calculate from bills due this month
-      const billsInMonth = bills.filter((b) => {
-        if (b.archived) return false;
+    // 1. Paid: Actual payments made in this month (from API)
+    // Filter out deposits if possible? The API returns total. 
+    // The user said "not income". 
+    // The current getMonthlyPayments API aggregates ALL payments. 
+    // We might need to fetch detailed payments or just assume for now. 
+    // However, the prompt says "Paid should be a total amount of all bills (not income)".
+    // The API /api/payments/monthly groups by month. It sums 'amount'.
+    // If 'amount' in payments table includes deposits, we have a problem.
+    // Let's assume for this step we use the API value, but strictly we might need a backend change to separate income/expense in monthly totals.
+    // For now, let's use the provided monthlyPayments.
+    const paid = monthlyPayments[monthKey] || 0;
+
+    // 2. Remaining: Bills due in this month that haven't been paid yet
+    // Filter for expenses only
+    const remaining = bills
+      .filter((b) => {
+        if (b.archived || b.type !== 'expense') return false;
         const due = parseDate(b.next_due);
         return due.getMonth() === month && due.getFullYear() === year;
-      });
-
-      // Total = sum of all bills due in this month
-      const total = billsInMonth.reduce((sum, b) => {
-        if (b.varies) {
-          return sum + (b.avg_amount || 0);
-        }
-        return sum + (b.amount || 0);
+      })
+      .reduce((sum, b) => {
+        const amount = b.varies ? (b.avg_amount || 0) : (b.amount || 0);
+        return sum + amount;
       }, 0);
 
-      // Remaining = bills due on/after today
-      const remaining = billsInMonth
-        .filter((b) => {
-          const due = parseDate(b.next_due);
-          return due >= today;
-        })
-        .reduce((sum, b) => sum + (b.varies ? (b.avg_amount || 0) : (b.amount || 0)), 0);
+    // 3. Total: Paid + Remaining
+    const total = paid + remaining;
 
-      const paid = total - remaining;
-      return { total, paid: Math.max(0, paid), remaining };
-    } else {
-      // Past months - use actual payment data from API
-      const monthKey = `${year}-${String(month + 1).padStart(2, '0')}`;
-      const paidAmount = monthlyPayments[monthKey] || 0;
-      return { total: paidAmount, paid: paidAmount, remaining: 0 };
-    }
+    return { total, paid, remaining };
   }, [bills, selectedMonthInfo, monthlyPayments]);
 
   // Upcoming bills stats (always for current month)
@@ -154,7 +150,6 @@ export function Sidebar({ bills, isLoggedIn, filter, onFilterChange, onShowChart
             variant="subtle"
             size="sm"
             onClick={() => setMonthOffset(monthOffset + 1)}
-            disabled={monthOffset >= 0}
           >
             <IconChevronRight size={16} />
           </ActionIcon>

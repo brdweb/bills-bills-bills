@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { Stack, Loader, Center, Divider, Text } from '@mantine/core';
+import { Stack, Loader, Center, Divider, Text, Anchor } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
 import { Routes, Route, useNavigate } from 'react-router-dom';
 import { Layout } from './components/Layout';
@@ -57,6 +57,7 @@ function App() {
 
   // Current editing/paying bill
   const [currentBill, setCurrentBill] = useState<Bill | null>(null);
+  const [historyBillId, setHistoryBillId] = useState<number | null>(null);
   const [historyBillName, setHistoryBillName] = useState<string | null>(null);
 
   // Filtered bills based on current filter
@@ -180,11 +181,13 @@ function App() {
 
   // Bill actions
   const handleAddBill = () => {
+    console.log('➕ App: handleAddBill called');
     setCurrentBill(null);
     openBillModal();
   };
 
   const handleEditBill = (bill: Bill) => {
+    console.log('📝 App: handleEditBill called', bill);
     setCurrentBill(bill);
     openBillModal();
   };
@@ -195,6 +198,7 @@ function App() {
   };
 
   const handleViewPayments = (bill: Bill) => {
+    setHistoryBillId(bill.id);
     setHistoryBillName(bill.name);
     openHistory();
   };
@@ -267,7 +271,10 @@ function App() {
                 />
                 <Divider />
                 <Text size="xs" c="dimmed" ta="center">
-                  Bills Bills Bills v2.2 - Licensed under MIT
+                  Bills Bills Bills v3.0 - Licensed under{' '}
+                  <Anchor href="https://osaasy.dev/" target="_blank" size="xs">
+                    O'Saasy
+                  </Anchor>
                 </Text>
               </>
             )}
@@ -339,6 +346,7 @@ function App() {
       <PaymentHistory
         opened={historyOpened}
         onClose={closeHistory}
+        billId={historyBillId}
         billName={historyBillName}
         onPaymentsChanged={fetchBills}
       />

@@ -88,9 +88,10 @@ function getDueBadgeColor(dateStr: string): string {
   const diffDays = Math.ceil((dueDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
 
   if (diffDays < 0) return 'red';
-  if (diffDays === 0) return 'red';
-  if (diffDays <= 3) return 'orange';
-  if (diffDays <= 7) return 'yellow';
+  if (diffDays <= 7) return 'red';
+  if (diffDays <= 14) return 'orange';
+  if (diffDays <= 21) return 'yellow';
+  if (diffDays <= 30) return 'blue';
   return 'gray';
 }
 
@@ -278,7 +279,7 @@ export function BillList({
                           {bill.type === 'deposit' ? 'Deposit' : 'Expense'}
                         </Badge>
                         {bill.account && (
-                          <Badge size="xs" variant="dot" color="gray">
+                          <Badge size="xs" variant="dot" color="cyan">
                             {bill.account}
                           </Badge>
                         )}

@@ -117,29 +117,52 @@ export function BillModal({ opened, onClose, onSave, onArchive, onUnarchive, onD
 
   useEffect(() => {
     if (opened) {
-      api.getAccounts().then(response => setAccounts(response.data));
+      console.log('🏁 BillModal: Modal opened, fetching accounts...');
+      api.getAccounts()
+        .then(response => {
+          console.log('✅ BillModal: Accounts fetched:', response.data);
+          setAccounts(response.data);
+        })
+        .catch(err => {
+          console.error('❌ BillModal: Failed to fetch accounts:', err);
+          setAccounts([]); // Fallback to empty list instead of crashing
+        });
     }
   }, [opened]);
 
   useEffect(() => {
-    if (bill) {
-      const frequencyConfig = bill.frequency_config ? JSON.parse(bill.frequency_config) : {};
-      form.setValues({
-        name: bill.name,
-        amount: bill.amount || '',
-        varies: bill.varies,
-        frequency: bill.frequency,
-        frequency_type: bill.frequency_type || 'simple',
-        monthly_dates: frequencyConfig.dates ? frequencyConfig.dates.join(', ') : '',
-        weekly_days: frequencyConfig.days || [],
-        next_due: bill.next_due ? new Date(bill.next_due) : null,
-        auto_payment: bill.auto_payment,
-        icon: bill.icon || 'payment',
-        type: bill.type || 'expense',
-        account: bill.account || null,
-      });
-    } else {
-      form.reset();
+    if (opened) {
+      console.log('🏁 BillModal: Initializing form with bill:', bill);
+      try {
+        if (bill) {
+          let frequencyConfig: { dates?: number[]; days?: number[] } = {};
+          try {
+            frequencyConfig = bill.frequency_config ? JSON.parse(bill.frequency_config) : {};
+          } catch (e) {
+            console.error('❌ BillModal: Failed to parse frequency_config:', e);
+          }
+          
+          form.setValues({
+            name: bill.name || '',
+            amount: bill.amount || '',
+            varies: bill.varies || false,
+            frequency: bill.frequency || 'monthly',
+            frequency_type: bill.frequency_type || 'simple',
+            monthly_dates: (frequencyConfig && frequencyConfig.dates) ? frequencyConfig.dates.join(', ') : '',
+            weekly_days: (frequencyConfig && frequencyConfig.days) ? frequencyConfig.days : [],
+            next_due: bill.next_due ? new Date(bill.next_due) : null,
+            auto_payment: bill.auto_payment || false,
+            icon: bill.icon || 'payment',
+            type: bill.type || 'expense',
+            account: bill.account || null,
+          });
+        } else {
+          console.log('✨ BillModal: Resetting form for new entry');
+          form.reset();
+        }
+      } catch (err) {
+        console.error('❌ BillModal: CRITICAL error during form initialization:', err);
+      }
     }
   }, [bill, opened]);
 

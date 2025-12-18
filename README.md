@@ -24,6 +24,13 @@ A **secure multi-user** web application for tracking recurring expenses and inco
 - **All Payments View**: Comprehensive table of all payments across all bills
 - **Enhanced UI**: Condensed sidebar, improved filters placement, and refined layout
 
+## License & Commercialization
+
+- **Versions ≤ 2.2**: Released under the [MIT License](LICENSE).
+- **Versions 3.0+ (Upcoming)**: Will be released under the **O'sassy License**. 
+
+This transition supports the future development of "Bills, Bills, Bills!" as a scalable SaaS platform.
+
 ## Quick Start
 
 ### Prerequisites

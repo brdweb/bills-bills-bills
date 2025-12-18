@@ -20,3 +20,16 @@ Thumbs.db
 .vscode/
 .claude/
 CLAUDE.md
+
+# Data and backup directories
+data/
+dbs/
+logs/
+client-backup/
+
+# Debug and handoff docs
+HANDOFF_DEBUG.md
+GEMINI.md
+
+# Test files
+test_*.py
