@@ -33,7 +33,11 @@ GEMINI.md
 
 # Test files
 test_*.py
-marketing/
+
+# Marketing site build output (source is tracked)
+marketing/dist/
+marketing/node_modules/
+marketing/.astro/
 
 # Environment files (contain secrets)
 .env
