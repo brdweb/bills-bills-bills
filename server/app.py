@@ -61,15 +61,25 @@ def check_csrf():
     if request.method in ('GET', 'HEAD', 'OPTIONS'):
         return True  # Safe methods don't need CSRF check
 
-    # Get allowed origins from environment or use default
-    app_url = os.environ.get('APP_URL', 'http://localhost:5173')
+    # Build allowed origins dynamically based on request host and env
+    app_url = os.environ.get('APP_URL', '')
+    host = request.headers.get('Host', '')
+
     allowed_origins = {
         'http://localhost:5173',  # Vite dev server
         'http://localhost:5001',  # Flask dev server
         'http://127.0.0.1:5173',
         'http://127.0.0.1:5001',
-        app_url,
     }
+
+    # Add APP_URL if set
+    if app_url:
+        allowed_origins.add(app_url)
+
+    # Dynamically allow the request's own host (same-origin)
+    if host:
+        allowed_origins.add(f"https://{host}")
+        allowed_origins.add(f"http://{host}")
 
     origin = request.headers.get('Origin')
     referer = request.headers.get('Referer')
