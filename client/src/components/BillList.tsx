@@ -248,7 +248,6 @@ export function BillList({
             <Table.Tr>
               <Table.Th>Name</Table.Th>
               <Table.Th>Amount</Table.Th>
-              <Table.Th>Account</Table.Th>
               <Table.Th>Due Date</Table.Th>
               <Table.Th>Frequency</Table.Th>
               <Table.Th>Actions</Table.Th>
@@ -309,13 +308,6 @@ export function BillList({
                     <Text fw={500} c={bill.type === 'deposit' ? 'green' : 'red'}>
                       ${(bill.amount || 0).toFixed(2)}
                     </Text>
-                  )}
-                </Table.Td>
-                <Table.Td>
-                  {bill.account ? (
-                    <Text size="sm">{bill.account}</Text>
-                  ) : (
-                    <Text size="sm" c="dimmed">—</Text>
                   )}
                 </Table.Td>
                 <Table.Td>

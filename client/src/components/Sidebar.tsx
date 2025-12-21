@@ -204,6 +204,8 @@ export function Sidebar({ bills, isLoggedIn, filter, onFilterChange, onShowChart
               size="xs"
               leftSection={<IconChartLine size={14} />}
               onClick={onShowChart}
+              styles={{ label: { whiteSpace: 'normal', lineHeight: 1.2 } }}
+              style={{ height: 48 }}
             >
               Trends
             </Button>
@@ -212,8 +214,10 @@ export function Sidebar({ bills, isLoggedIn, filter, onFilterChange, onShowChart
               size="xs"
               leftSection={<IconListDetails size={14} />}
               onClick={onShowAllPayments}
+              styles={{ label: { whiteSpace: 'normal', lineHeight: 1.2 } }}
+              style={{ height: 48 }}
             >
-              Payments
+              Payment History
             </Button>
           </Group>
         )}

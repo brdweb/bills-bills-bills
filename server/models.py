@@ -2,6 +2,7 @@ from flask_sqlalchemy import SQLAlchemy
 from datetime import datetime, timedelta
 import hashlib
 import secrets
+from werkzeug.security import generate_password_hash, check_password_hash
 
 db = SQLAlchemy()
 
@@ -15,7 +16,7 @@ class User(db.Model):
     __tablename__ = 'users'
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(80), unique=True, nullable=False)
-    password_hash = db.Column(db.String(128), nullable=False)
+    password_hash = db.Column(db.String(256), nullable=False)
     role = db.Column(db.String(20), default='user')
     password_change_required = db.Column(db.Boolean, default=False)
     change_token = db.Column(db.String(64), nullable=True)
@@ -38,10 +39,25 @@ class User(db.Model):
     accessible_databases = db.relationship('Database', secondary=user_database_access, backref='users')
 
     def set_password(self, password):
-        self.password_hash = hashlib.sha256(password.encode()).hexdigest()
+        """Hash password using werkzeug's secure method (pbkdf2:sha256)."""
+        self.password_hash = generate_password_hash(password)
 
     def check_password(self, password):
-        return self.password_hash == hashlib.sha256(password.encode()).hexdigest()
+        """
+        Verify password. Supports both:
+        - New bcrypt/pbkdf2 hashes (werkzeug format)
+        - Legacy SHA-256 hashes (for migration)
+        """
+        # Check if this is a legacy SHA-256 hash (64 hex chars, no prefix)
+        if len(self.password_hash) == 64 and not self.password_hash.startswith(('pbkdf2:', 'scrypt:')):
+            # Legacy SHA-256 verification
+            if self.password_hash == hashlib.sha256(password.encode()).hexdigest():
+                # Auto-migrate to secure hash on successful login
+                self.set_password(password)
+                return True
+            return False
+        # Modern werkzeug hash verification
+        return check_password_hash(self.password_hash, password)
 
     def generate_email_verification_token(self):
         """Generate a secure token for email verification (24 hour expiry)"""

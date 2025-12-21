@@ -12,10 +12,14 @@ import jwt
 from flask import Flask, request, jsonify, send_from_directory, session, g, Blueprint
 from flask_cors import CORS
 from flask_migrate import Migrate
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
+from flask_talisman import Talisman
 from sqlalchemy import func, extract, desc
 
 from models import db, User, Database, Bill, Payment, RefreshToken, Subscription
 from migration import migrate_sqlite_to_pg
+from db_migrations import run_pending_migrations
 from services.email import send_verification_email, send_password_reset_email, send_welcome_email
 from services.stripe_service import (
     create_checkout_session, create_portal_session, construct_webhook_event,
@@ -40,12 +44,58 @@ api_bp = Blueprint('api', __name__)
 api_v2_bp = Blueprint('api_v2', __name__, url_prefix='/api/v2')
 spa_bp = Blueprint('spa', __name__)
 
+# --- Rate Limiter (initialized in create_app) ---
+limiter = Limiter(
+    key_func=get_remote_address,
+    default_limits=["200 per day", "50 per hour"],
+    storage_uri="memory://",
+)
+
+# --- CSRF Protection ---
+
+def check_csrf():
+    """
+    Check Origin/Referer header for CSRF protection on state-changing requests.
+    Used in combination with SameSite=Lax cookies.
+    """
+    if request.method in ('GET', 'HEAD', 'OPTIONS'):
+        return True  # Safe methods don't need CSRF check
+
+    # Get allowed origins from environment or use default
+    app_url = os.environ.get('APP_URL', 'http://localhost:5173')
+    allowed_origins = {
+        'http://localhost:5173',  # Vite dev server
+        'http://localhost:5001',  # Flask dev server
+        'http://127.0.0.1:5173',
+        'http://127.0.0.1:5001',
+        app_url,
+    }
+
+    origin = request.headers.get('Origin')
+    referer = request.headers.get('Referer')
+
+    # Check Origin header first (most reliable)
+    if origin:
+        return origin in allowed_origins
+
+    # Fall back to Referer header
+    if referer:
+        from urllib.parse import urlparse
+        referer_origin = f"{urlparse(referer).scheme}://{urlparse(referer).netloc}"
+        return referer_origin in allowed_origins
+
+    # If neither header present, allow it (same-origin requests don't always send Origin)
+    # Combined with SameSite=Lax cookies, this provides good CSRF protection
+    # Cross-origin requests from browsers always send Origin header
+    return True
+
 # --- Decorators ---
 
 def login_required(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
         if 'user_id' not in session: return jsonify({'error': 'Authentication required'}), 401
+        if not check_csrf(): return jsonify({'error': 'CSRF validation failed'}), 403
         return f(*args, **kwargs)
     return decorated_function
 
@@ -53,6 +103,7 @@ def admin_required(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
         if 'role' not in session or session['role'] != 'admin': return jsonify({'error': 'Admin access required'}), 403
+        if not check_csrf(): return jsonify({'error': 'CSRF validation failed'}), 403
         return f(*args, **kwargs)
     return decorated_function
 
@@ -208,9 +259,12 @@ def calculate_next_due_date(current_due, frequency, frequency_type='simple', fre
 # --- API Routes ---
 
 @api_bp.route('/login', methods=['POST'])
+@limiter.limit("5 per minute")
 def login():
     data = request.get_json(); user = User.query.filter_by(username=data.get('username')).first()
     if user and user.check_password(data.get('password')):
+        # Commit any password hash migration that occurred during check_password
+        db.session.commit()
         if user.password_change_required:
             token = secrets.token_hex(32); user.change_token = token; db.session.commit()
             return jsonify({'require_password_change': True, 'user_id': user.id, 'change_token': token, 'role': user.role})
@@ -351,7 +405,10 @@ def bills_handler():
 @api_bp.route('/bills/<int:bill_id>', methods=['PUT', 'DELETE'])
 @login_required
 def bill_detail_handler(bill_id):
+    target_db = Database.query.filter_by(name=session.get('db_name')).first()
+    if not target_db: return jsonify({'error': 'No database selected'}), 400
     bill = Bill.query.get_or_404(bill_id)
+    if bill.database_id != target_db.id: return jsonify({'error': 'Access denied'}), 403
     if request.method == 'PUT':
         data = request.get_json(); bill.name = data.get('name', bill.name); bill.amount = data.get('amount', bill.amount)
         bill.is_variable = data.get('varies', bill.is_variable); bill.frequency = data.get('frequency', bill.frequency)
@@ -364,17 +421,29 @@ def bill_detail_handler(bill_id):
 @api_bp.route('/bills/<int:bill_id>/unarchive', methods=['POST'])
 @login_required
 def unarchive_bill(bill_id):
-    bill = Bill.query.get_or_404(bill_id); bill.archived = False; db.session.commit(); return jsonify({'message': 'Unarchived'})
+    target_db = Database.query.filter_by(name=session.get('db_name')).first()
+    if not target_db: return jsonify({'error': 'No database selected'}), 400
+    bill = Bill.query.get_or_404(bill_id)
+    if bill.database_id != target_db.id: return jsonify({'error': 'Access denied'}), 403
+    bill.archived = False; db.session.commit(); return jsonify({'message': 'Unarchived'})
 
 @api_bp.route('/bills/<int:bill_id>/permanent', methods=['DELETE'])
 @login_required
 def delete_bill_permanent(bill_id):
-    bill = Bill.query.get_or_404(bill_id); db.session.delete(bill); db.session.commit(); return jsonify({'message': 'Deleted'})
+    target_db = Database.query.filter_by(name=session.get('db_name')).first()
+    if not target_db: return jsonify({'error': 'No database selected'}), 400
+    bill = Bill.query.get_or_404(bill_id)
+    if bill.database_id != target_db.id: return jsonify({'error': 'Access denied'}), 403
+    db.session.delete(bill); db.session.commit(); return jsonify({'message': 'Deleted'})
 
 @api_bp.route('/bills/<int:bill_id>/pay', methods=['POST'])
 @login_required
 def pay_bill(bill_id):
-    data = request.get_json(); bill = Bill.query.get_or_404(bill_id)
+    target_db = Database.query.filter_by(name=session.get('db_name')).first()
+    if not target_db: return jsonify({'error': 'No database selected'}), 400
+    bill = Bill.query.get_or_404(bill_id)
+    if bill.database_id != target_db.id: return jsonify({'error': 'Access denied'}), 403
+    data = request.get_json()
     payment = Payment(bill_id=bill.id, amount=data.get('amount'), payment_date=datetime.date.today().isoformat(), notes=data.get('notes'))
     db.session.add(payment)
     if data.get('advance_due', True):
@@ -403,8 +472,11 @@ def get_payments_by_id(bill_id):
 @api_bp.route('/payments/<int:id>', methods=['PUT'])
 @login_required
 def update_payment(id):
-    data = request.get_json()
+    target_db = Database.query.filter_by(name=session.get('db_name')).first()
+    if not target_db: return jsonify({'error': 'No database selected'}), 400
     payment = Payment.query.get_or_404(id)
+    if payment.bill.database_id != target_db.id: return jsonify({'error': 'Access denied'}), 403
+    data = request.get_json()
     if 'amount' in data: payment.amount = data['amount']
     if 'payment_date' in data: payment.payment_date = data['payment_date']
     if 'notes' in data: payment.notes = data['notes']
@@ -414,7 +486,10 @@ def update_payment(id):
 @api_bp.route('/payments/<int:id>', methods=['DELETE'])
 @login_required
 def delete_payment(id):
+    target_db = Database.query.filter_by(name=session.get('db_name')).first()
+    if not target_db: return jsonify({'error': 'No database selected'}), 400
     payment = Payment.query.get_or_404(id)
+    if payment.bill.database_id != target_db.id: return jsonify({'error': 'Access denied'}), 403
     db.session.delete(payment)
     db.session.commit()
     return jsonify({'message': 'Payment deleted'})
@@ -468,6 +543,7 @@ def ping(): return jsonify({'status': 'ok'})
 # --- API v2 Routes (JWT Auth for Mobile) ---
 
 @api_v2_bp.route('/auth/login', methods=['POST'])
+@limiter.limit("5 per minute")
 def jwt_login():
     """JWT login endpoint for mobile apps."""
     data = request.get_json(force=True, silent=True)
@@ -484,6 +560,9 @@ def jwt_login():
     user = User.query.filter_by(username=username).first()
     if not user or not user.check_password(password):
         return jsonify({'success': False, 'error': 'Invalid username or password'}), 401
+
+    # Commit any password hash migration that occurred during check_password
+    db.session.commit()
 
     # Check email verification if required
     if REQUIRE_EMAIL_VERIFICATION and not user.is_email_verified:
@@ -584,6 +663,7 @@ def jwt_logout_all():
 # --- Registration & Password Reset Endpoints ---
 
 @api_v2_bp.route('/auth/register', methods=['POST'])
+@limiter.limit("3 per minute;10 per hour")
 def register():
     """Register a new user account."""
     # Check if registration is enabled
@@ -750,6 +830,7 @@ def resend_verification():
 
 
 @api_v2_bp.route('/auth/forgot-password', methods=['POST'])
+@limiter.limit("3 per minute;10 per hour")
 def forgot_password():
     """Request password reset email."""
     data = request.get_json(force=True, silent=True)
@@ -1542,7 +1623,36 @@ def create_app():
     app.config['SQLALCHEMY_DATABASE_URI'] = db_url
     app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
     CORS(app, supports_credentials=True); db.init_app(app); Migrate(app, db)
-    
+
+    # Initialize rate limiter
+    limiter.init_app(app)
+
+    # Security headers with Talisman (only in production - check for production URL or explicit env var)
+    is_production = os.environ.get('FLASK_ENV') == 'production' or 'billmanager.app' in os.environ.get('APP_URL', '')
+    if is_production:
+        Talisman(
+            app,
+            force_https=True,
+            strict_transport_security=True,
+            strict_transport_security_max_age=31536000,
+            content_security_policy={
+                'default-src': "'self'",
+                'script-src': ["'self'", "'unsafe-inline'", "unpkg.com"],  # Swagger UI needs these
+                'style-src': ["'self'", "'unsafe-inline'", "unpkg.com"],
+                'img-src': ["'self'", "data:"],
+                'connect-src': ["'self'"],
+            },
+            referrer_policy='strict-origin-when-cross-origin',
+            x_content_type_options=True,
+            x_xss_protection=True,
+        )
+
+    # Secure session cookie configuration
+    app.config['SESSION_COOKIE_SECURE'] = is_production  # HTTPS only in production
+    app.config['SESSION_COOKIE_HTTPONLY'] = True  # Prevent JS access
+    app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'  # CSRF protection
+    app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(hours=24)
+
     @app.before_request
     def log_request_info():
         g.start_time = datetime.datetime.now(); logger.info(f"➡️  {request.method} {request.path}")
@@ -1564,6 +1674,10 @@ def create_app():
             logger.info("🗺️  Registered Routes:")
             for rule in app.url_map.iter_rules(): logger.info(f"    {rule.methods} {rule.rule} -> {rule.endpoint}")
             db.create_all(); migrate_sqlite_to_pg(app)
+
+            # Run any pending database migrations
+            logger.info("🔄 Checking for pending database migrations...")
+            run_pending_migrations(db)
 
             # First-run detection: only create defaults if NO users exist
             user_count = User.query.count()

@@ -1,5 +1,7 @@
 flask==3.1.2
 flask-cors==6.0.1
+flask-limiter==3.5.0
+flask-talisman==1.1.0
 gunicorn==23.0.0
 flask-sqlalchemy==3.1.1
 psycopg[binary]>=3.2

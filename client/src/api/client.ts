@@ -10,25 +10,13 @@ const api = axios.create({
   withCredentials: true,
 });
 
-// Add request logging
-api.interceptors.request.use((config) => {
-  console.log('🌐 API Request:', config.method?.toUpperCase(), config.url);
-  if (config.data) {
-    console.log('📦 Request Data:', config.data);
-  }
-  return config;
-});
-
-// Add response logging
+// Only log errors in development, never log request data (may contain passwords)
 api.interceptors.response.use(
-  (response) => {
-    console.log('✅ API Response:', response.config.method?.toUpperCase(), response.config.url);
-    console.log('📥 Response Data:', response.data);
-    return response;
-  },
+  (response) => response,
   (error) => {
-    console.error('❌ API Error:', error.config?.method?.toUpperCase(), error.config?.url);
-    console.error('❌ Error Details:', error.response?.data || error.message);
+    if (import.meta.env.DEV) {
+      console.error('API Error:', error.config?.method?.toUpperCase(), error.config?.url, error.response?.status);
+    }
     return Promise.reject(error);
   }
 );
