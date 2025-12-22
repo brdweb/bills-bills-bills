@@ -223,7 +223,7 @@ export function UsersTab() {
             </Group>
 
             <Text size="sm" fw={500}>
-              Database Access
+              Bill Group Access
             </Text>
             <Group>
               {databases.map((db) => (
@@ -258,7 +258,7 @@ export function UsersTab() {
       <Modal
         opened={!!editingUser}
         onClose={() => setEditingUser(null)}
-        title={`Database Access: ${editingUser?.username}`}
+        title={`Bill Group Access: ${editingUser?.username}`}
         centered
       >
         <Stack gap="md">

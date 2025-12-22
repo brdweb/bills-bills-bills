@@ -53,7 +53,7 @@ export function DatabasesTab() {
 
     // Validate name format
     if (!/^[a-zA-Z0-9_-]+$/.test(newName)) {
-      alert('Database name can only contain letters, numbers, underscores, and hyphens');
+      alert('Group name can only contain letters, numbers, underscores, and hyphens');
       return;
     }
 
@@ -66,7 +66,7 @@ export function DatabasesTab() {
       setNewDisplayName('');
       setNewDescription('');
     } catch (error: any) {
-      alert(error.response?.data?.error || 'Failed to create database');
+      alert(error.response?.data?.error || 'Failed to create bill group');
     } finally {
       setAddLoading(false);
     }
@@ -78,11 +78,11 @@ export function DatabasesTab() {
       const accessRes = await getDatabaseAccess(db.id!);
       const usersWithAccess = accessRes.data;
 
-      let message = `Are you sure you want to delete "${db.display_name}"?\n\nThis will permanently delete all bills and payments.`;
+      let message = `Are you sure you want to delete "${db.display_name}"?\n\nThis will permanently delete all bills and payments in this group.`;
 
       if (usersWithAccess.length > 0) {
         const userNames = usersWithAccess.map((u) => u.username).join(', ');
-        message = `WARNING: "${db.display_name}" has ${usersWithAccess.length} user(s) with access: ${userNames}\n\nDeleting will:\n- Permanently delete all bills and payments\n- Remove access for all users\n\nContinue?`;
+        message = `WARNING: "${db.display_name}" has ${usersWithAccess.length} user(s) with access: ${userNames}\n\nDeleting will:\n- Permanently delete all bills and payments in this group\n- Remove access for all users\n\nContinue?`;
       }
 
       if (!confirm(message)) return;
@@ -91,7 +91,7 @@ export function DatabasesTab() {
       await fetchDatabases();
       await refreshAuth(); // Refresh user's database list
     } catch (error: any) {
-      alert(error.response?.data?.error || 'Failed to delete database');
+      alert(error.response?.data?.error || 'Failed to delete bill group');
     }
   };
 
@@ -147,21 +147,21 @@ export function DatabasesTab() {
 
       <Paper p="md" withBorder>
         <Stack gap="sm">
-          <Text fw={500}>Create New Database</Text>
+          <Text fw={500}>Create New Bill Group</Text>
           <Group grow>
             <TextInput
-              label="Database Name"
+              label="Group Name"
               description="Used internally (letters, numbers, _, -)"
               value={newName}
               onChange={(e) => setNewName(e.currentTarget.value)}
-              placeholder="my_database"
+              placeholder="my_bills"
             />
             <TextInput
               label="Display Name"
               description="Shown to users"
               value={newDisplayName}
               onChange={(e) => setNewDisplayName(e.currentTarget.value)}
-              placeholder="My Database"
+              placeholder="My Bills"
             />
             <TextInput
               label="Description"
@@ -177,7 +177,7 @@ export function DatabasesTab() {
             loading={addLoading}
             disabled={!newName || !newDisplayName}
           >
-            Create Database
+            Create Bill Group
           </Button>
         </Stack>
       </Paper>

@@ -15,16 +15,18 @@ import {
   ActionIcon,
   Button,
   Collapse,
+  Menu,
 } from '@mantine/core';
 import { DatePickerInput } from '@mantine/dates';
 import { useDisclosure } from '@mantine/hooks';
 import { BarChart } from '@mantine/charts';
-import { IconSearch, IconX, IconArrowLeft, IconChartBar, IconChevronDown, IconChevronUp } from '@tabler/icons-react';
+import { IconSearch, IconX, IconArrowLeft, IconChartBar, IconChevronDown, IconChevronUp, IconDownload, IconFileTypeCsv, IconFileTypePdf } from '@tabler/icons-react';
 import { useNavigate } from 'react-router-dom';
 import { getAllPayments, updatePayment, deletePayment } from '../api/client';
 import type { PaymentWithBill } from '../api/client';
 import { BillIcon } from '../components/BillIcon';
 import { IconEdit, IconTrash, IconCheck } from '@tabler/icons-react';
+import { exportPaymentsToCSV, exportPaymentsToPDF } from '../utils/export';
 
 interface MonthlyChartData {
   month: string;
@@ -216,9 +218,33 @@ export function AllPayments() {
           </ActionIcon>
           <Title order={2}>All Payments</Title>
         </Group>
-        <Badge size="lg" variant="light">
-          {filteredPayments.length} payments · ${totalAmount.toFixed(2)} total
-        </Badge>
+        <Group gap="sm">
+          <Badge size="lg" variant="light">
+            {filteredPayments.length} payments · ${totalAmount.toFixed(2)} total
+          </Badge>
+          <Menu shadow="md" width={200}>
+            <Menu.Target>
+              <Button variant="light" leftSection={<IconDownload size={16} />} size="sm">
+                Export
+              </Button>
+            </Menu.Target>
+            <Menu.Dropdown>
+              <Menu.Label>Export payments</Menu.Label>
+              <Menu.Item
+                leftSection={<IconFileTypeCsv size={16} />}
+                onClick={() => exportPaymentsToCSV(filteredPayments, { from: dateFrom || undefined, to: dateTo || undefined })}
+              >
+                Export as CSV
+              </Menu.Item>
+              <Menu.Item
+                leftSection={<IconFileTypePdf size={16} />}
+                onClick={() => exportPaymentsToPDF(filteredPayments, { from: dateFrom || undefined, to: dateTo || undefined })}
+              >
+                Export as PDF
+              </Menu.Item>
+            </Menu.Dropdown>
+          </Menu>
+        </Group>
       </Group>
 
       {/* Filters */}

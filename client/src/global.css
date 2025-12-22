@@ -1,0 +1,67 @@
+/* Print styles - hide navigation, sidebar, and action buttons when printing */
+@media print {
+  /* Hide the app shell header and navbar */
+  .mantine-AppShell-header,
+  .mantine-AppShell-navbar {
+    display: none !important;
+  }
+
+  /* Make main content full width */
+  .mantine-AppShell-main {
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+
+  /* Hide action buttons and menus */
+  .mantine-ActionIcon-root,
+  .mantine-Button-root,
+  .mantine-Menu-dropdown,
+  .mantine-Select-root,
+  .mantine-TextInput-root,
+  .mantine-NumberInput-root,
+  .mantine-DatePickerInput-root {
+    display: none !important;
+  }
+
+  /* Show tables nicely */
+  .mantine-Table-root {
+    width: 100% !important;
+  }
+
+  .mantine-Table-th,
+  .mantine-Table-td {
+    border: 1px solid #ddd !important;
+    padding: 8px !important;
+  }
+
+  /* Page breaks */
+  .mantine-Paper-root {
+    break-inside: avoid;
+  }
+
+  /* Remove shadows and borders for cleaner print */
+  .mantine-Paper-root {
+    box-shadow: none !important;
+  }
+
+  /* Make sure text is black for better printing */
+  body {
+    color: black !important;
+    background: white !important;
+  }
+
+  /* Hide badges except important ones */
+  .mantine-Badge-root[data-variant="dot"],
+  .mantine-Badge-root[data-color="gray"] {
+    display: none !important;
+  }
+
+  /* Show only essential badges */
+  .mantine-Badge-root[data-color="green"],
+  .mantine-Badge-root[data-color="blue"],
+  .mantine-Badge-root[data-color="red"] {
+    display: inline-flex !important;
+    background: transparent !important;
+    border: 1px solid currentColor !important;
+  }
+}

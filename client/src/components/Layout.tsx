@@ -47,7 +47,7 @@ export function Layout({ children, sidebar, onAdminClick }: LayoutProps) {
           <Group>
             {isLoggedIn && databases.length > 0 && (
               <Select
-                placeholder="Select database"
+                placeholder="Select bill group"
                 data={databases.map((db) => ({
                   value: db.name,
                   label: db.display_name,

@@ -11,8 +11,10 @@ import {
   Card,
   TextInput,
   Select,
+  Menu,
 } from '@mantine/core';
-import { IconEdit, IconCash, IconPlus, IconFilterOff, IconSearch, IconX } from '@tabler/icons-react';
+import { IconEdit, IconCash, IconPlus, IconFilterOff, IconSearch, IconX, IconDownload, IconFileTypeCsv, IconFileTypePdf } from '@tabler/icons-react';
+import { exportBillsToCSV, exportBillsToPDF } from '../utils/export';
 import type { Bill } from '../api/client';
 import { getAccounts } from '../api/client';
 import { BillIcon } from './BillIcon';
@@ -138,10 +140,10 @@ export function BillList({
       <Card p="xl" withBorder>
         <Stack align="center" gap="md">
           <Text size="lg" c="dimmed">
-            No database access
+            No bill group access
           </Text>
           <Text size="sm" c="dimmed" ta="center">
-            Your account does not have access to any databases.
+            Your account does not have access to any bill groups.
             Please contact an administrator to grant you access.
           </Text>
         </Stack>
@@ -236,6 +238,28 @@ export function BillList({
               w={200}
             />
           )}
+          <Menu shadow="md" width={200}>
+            <Menu.Target>
+              <Button variant="light" leftSection={<IconDownload size={16} />} size="sm">
+                Export
+              </Button>
+            </Menu.Target>
+            <Menu.Dropdown>
+              <Menu.Label>Export bills</Menu.Label>
+              <Menu.Item
+                leftSection={<IconFileTypeCsv size={16} />}
+                onClick={() => exportBillsToCSV(bills)}
+              >
+                Export as CSV
+              </Menu.Item>
+              <Menu.Item
+                leftSection={<IconFileTypePdf size={16} />}
+                onClick={() => exportBillsToPDF(bills)}
+              >
+                Export as PDF
+              </Menu.Item>
+            </Menu.Dropdown>
+          </Menu>
           <Button leftSection={<IconPlus size={16} />} onClick={onAdd} size="sm">
             Add Entry
           </Button>

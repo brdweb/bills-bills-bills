@@ -1,5 +1,5 @@
 import { Modal, Tabs } from '@mantine/core';
-import { IconUsers, IconDatabase } from '@tabler/icons-react';
+import { IconUsers, IconFolders } from '@tabler/icons-react';
 import { UsersTab } from './UsersTab';
 import { DatabasesTab } from './DatabasesTab';
 
@@ -22,8 +22,8 @@ export function AdminModal({ opened, onClose }: AdminModalProps) {
           <Tabs.Tab value="users" leftSection={<IconUsers size={16} />}>
             Users
           </Tabs.Tab>
-          <Tabs.Tab value="databases" leftSection={<IconDatabase size={16} />}>
-            Databases
+          <Tabs.Tab value="databases" leftSection={<IconFolders size={16} />}>
+            Bill Groups
           </Tabs.Tab>
         </Tabs.List>
 
