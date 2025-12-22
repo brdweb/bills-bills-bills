@@ -25,31 +25,10 @@ import {
   IconAlertCircle,
   IconCrown,
   IconCalendar,
-  IconX,
   IconRocket,
-  IconUsers,
-  IconFileExport,
-  IconChartBar,
-  IconHeadset,
 } from '@tabler/icons-react';
 import * as api from '../api/client';
 import type { SubscriptionStatus, BillingUsage } from '../api/client';
-
-interface PlanFeature {
-  name: string;
-  basic: boolean | string;
-  plus: boolean | string;
-}
-
-const PLAN_FEATURES: PlanFeature[] = [
-  { name: 'Unlimited bills', basic: true, plus: true },
-  { name: 'Payment history', basic: true, plus: true },
-  { name: 'Family members', basic: '2 users', plus: '5 users' },
-  { name: 'Bill groups', basic: '1', plus: '3' },
-  { name: 'Export (CSV/PDF)', basic: true, plus: true },
-  { name: 'Analytics charts', basic: true, plus: true },
-  { name: 'Priority support', basic: false, plus: true },
-];
 
 const PRICING = {
   basic: { monthly: 5, annual: 50 },
@@ -63,7 +42,6 @@ export function Billing() {
   const [error, setError] = useState('');
   const [actionLoading, setActionLoading] = useState(false);
   const [billingInterval, setBillingInterval] = useState<'monthly' | 'annual'>('monthly');
-  const [selectedTier, setSelectedTier] = useState<'basic' | 'plus'>('basic');
 
   useEffect(() => {
     fetchData();
@@ -160,17 +138,6 @@ export function Billing() {
   const formatTierName = (tier?: string) => {
     if (!tier) return 'Free';
     return tier.charAt(0).toUpperCase() + tier.slice(1);
-  };
-
-  const renderFeatureValue = (value: boolean | string) => {
-    if (typeof value === 'boolean') {
-      return value ? (
-        <IconCheck size={18} color="var(--mantine-color-green-6)" />
-      ) : (
-        <IconX size={18} color="var(--mantine-color-gray-4)" />
-      );
-    }
-    return <Text size="sm" fw={500}>{value}</Text>;
   };
 
   const getAnnualSavings = (tier: 'basic' | 'plus') => {
@@ -339,7 +306,6 @@ export function Billing() {
 
               <Button
                 fullWidth
-                variant={selectedTier === 'basic' ? 'filled' : 'light'}
                 onClick={() => handleSubscribe('basic')}
                 loading={actionLoading}
                 leftSection={<IconCrown size={16} />}
