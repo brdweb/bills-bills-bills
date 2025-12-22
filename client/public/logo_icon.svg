@@ -1,0 +1,30 @@
+<svg width="512" height="512" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Background: Squircle (Superellispse-ish) for App Icon shape -->
+  <rect x="32" y="32" width="448" height="448" rx="120" fill="#064E3B" />
+  
+  <!-- Shadow for depth -->
+  <ellipse cx="256" cy="380" rx="160" ry="20" fill="#000000" fill-opacity="0.3" />
+
+  <!-- Credit Card / Bill Shape -->
+  <g transform="translate(0, -20)">
+    <!-- Main Card Body -->
+    <rect x="96" y="144" width="320" height="200" rx="24" fill="#10B981" stroke="#34D399" stroke-width="8"/>
+    
+    <!-- Magnetic Strip -->
+    <rect x="96" y="180" width="320" height="40" fill="#022C22" fill-opacity="0.8"/>
+    
+    <!-- Chip -->
+    <rect x="136" y="240" width="48" height="36" rx="8" fill="#FBBF24"/>
+    
+    <!-- Text Lines (Abstract) -->
+    <rect x="200" y="248" width="120" height="8" rx="4" fill="#ECFDF5" fill-opacity="0.5"/>
+    <rect x="200" y="264" width="80" height="8" rx="4" fill="#ECFDF5" fill-opacity="0.5"/>
+  </g>
+
+  <!-- "Paid" Stamp / Checkmark Badge -->
+  <!-- A circular badge in the bottom right overlapping the card -->
+  <g transform="translate(320, 320)">
+    <circle cx="0" cy="0" r="80" fill="#F59E0B" stroke="#FFFFFF" stroke-width="8"/>
+    <path d="M-40 0 L-10 30 L 40 -30" stroke="white" stroke-width="16" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+</svg>

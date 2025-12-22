@@ -1,18 +1,18 @@
 import { createTheme } from '@mantine/core';
 import type { MantineColorsTuple } from '@mantine/core';
 
-// Custom vibrant color for bills
+// Custom emerald color palette matching the logo
 const billGreen: MantineColorsTuple = [
-  '#e6fff0',
-  '#d0f9e0',
-  '#a3f2c1',
-  '#72eb9f',
-  '#4ae582',
-  '#31e16f',
-  '#1fdf64',
-  '#0dc653',
-  '#00b048',
-  '#00993a'
+  '#ecfdf5',  // 50
+  '#d1fae5',  // 100
+  '#a7f3d0',  // 200
+  '#6ee7b7',  // 300
+  '#34d399',  // 400
+  '#10b981',  // 500 - primary (matches logo)
+  '#059669',  // 600
+  '#047857',  // 700
+  '#065f46',  // 800
+  '#064e3b'   // 900 (matches logo background)
 ];
 
 const billOrange: MantineColorsTuple = [
@@ -29,7 +29,7 @@ const billOrange: MantineColorsTuple = [
 ];
 
 export const theme = createTheme({
-  primaryColor: 'violet',
+  primaryColor: 'billGreen',
   colors: {
     billGreen,
     billOrange,

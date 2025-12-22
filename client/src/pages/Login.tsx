@@ -149,7 +149,7 @@ export function Login() {
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+          background: 'linear-gradient(135deg, #059669 0%, #064e3b 100%)',
         }}
       >
         <Container size={420}>
@@ -178,11 +178,12 @@ export function Login() {
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+        background: 'linear-gradient(135deg, #059669 0%, #064e3b 100%)',
       }}
     >
       <Container size={440}>
         <Stack gap="lg" align="center" mb="xl">
+          <img src="/logo_icon.svg" alt="BillManager" style={{ width: 100, height: 100 }} />
           <Title
             order={1}
             style={{

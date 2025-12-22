@@ -9,7 +9,7 @@ import {
   Burger,
 } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
-import { IconSun, IconMoon, IconSettings, IconLogout, IconCash } from '@tabler/icons-react';
+import { IconSun, IconMoon, IconSettings, IconLogout } from '@tabler/icons-react';
 import { useAuth } from '../context/AuthContext';
 import type { ReactNode } from 'react';
 
@@ -40,8 +40,8 @@ export function Layout({ children, sidebar, onAdminClick }: LayoutProps) {
         <Group h="100%" px="md" justify="space-between">
           <Group>
             <Burger opened={opened} onClick={toggle} hiddenFrom="sm" size="sm" />
-            <IconCash size={32} color="var(--mantine-color-violet-6)" />
-            <Title order={3} c="violet">BillManager</Title>
+            <img src="/logo_icon.svg" alt="BillManager" style={{ width: 36, height: 36 }} />
+            <Title order={3} c="billGreen">BillManager</Title>
           </Group>
 
           <Group>
