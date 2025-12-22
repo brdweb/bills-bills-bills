@@ -223,6 +223,126 @@ def jwt_admin_required(f):
         return f(*args, **kwargs)
     return decorated_function
 
+# --- Subscription & Tier Helpers ---
+
+def get_user_effective_tier(user):
+    """
+    Get the effective tier for a user based on their subscription status.
+    Returns 'free', 'basic', or 'plus'.
+    """
+    from config import is_saas
+
+    # Self-hosted mode: everyone gets unlimited (plus tier)
+    if not is_saas():
+        return 'plus'
+
+    if not user.subscription:
+        return 'free'
+
+    return user.subscription.effective_tier
+
+
+def check_tier_limit(user, feature: str) -> tuple[bool, dict]:
+    """
+    Check if user is within their tier limit for a feature.
+
+    Returns:
+        tuple: (allowed: bool, info: dict with limit details)
+    """
+    from config import is_saas, get_tier_limits
+
+    # Self-hosted mode: no limits
+    if not is_saas():
+        return True, {'limit': -1, 'used': 0, 'unlimited': True}
+
+    tier = get_user_effective_tier(user)
+    limits = get_tier_limits(tier)
+    limit = limits.get(feature)
+
+    # Boolean features (export, full_analytics)
+    if isinstance(limit, bool):
+        return limit, {'allowed': limit, 'tier': tier}
+
+    # Numeric limits (-1 = unlimited)
+    if limit == -1:
+        return True, {'limit': -1, 'used': 0, 'unlimited': True, 'tier': tier}
+
+    # Count current usage
+    if feature == 'bills':
+        # Count active (non-archived) bills across all user's databases
+        from models import Bill
+        used = Bill.query.join(Database).filter(
+            Database.id.in_([db.id for db in user.accessible_databases]),
+            Bill.archived == False
+        ).count()
+    elif feature == 'bill_groups':
+        used = len(user.accessible_databases)
+    elif feature == 'users':
+        # For now, just return limit (user management is admin-level)
+        used = 1
+    else:
+        used = 0
+
+    allowed = used < limit
+    return allowed, {
+        'limit': limit,
+        'used': used,
+        'remaining': max(0, limit - used),
+        'tier': tier
+    }
+
+
+def subscription_required(feature: str = None, min_tier: str = None):
+    """
+    Decorator to require active subscription and optionally check feature limits.
+
+    Args:
+        feature: Feature to check limit for (e.g., 'bills', 'export')
+        min_tier: Minimum tier required ('basic' or 'plus')
+    """
+    def decorator(f):
+        @wraps(f)
+        def decorated_function(*args, **kwargs):
+            from config import is_saas
+
+            # Skip checks in self-hosted mode
+            if not is_saas():
+                return f(*args, **kwargs)
+
+            user = User.query.get(g.jwt_user_id)
+            if not user:
+                return jsonify({'success': False, 'error': 'User not found'}), 404
+
+            tier = get_user_effective_tier(user)
+
+            # Check minimum tier if specified
+            if min_tier:
+                tier_order = {'free': 0, 'basic': 1, 'plus': 2}
+                if tier_order.get(tier, 0) < tier_order.get(min_tier, 0):
+                    return jsonify({
+                        'success': False,
+                        'error': f'This feature requires {min_tier.title()} tier or higher',
+                        'upgrade_required': True,
+                        'required_tier': min_tier,
+                        'current_tier': tier
+                    }), 403
+
+            # Check feature limit if specified
+            if feature:
+                allowed, info = check_tier_limit(user, feature)
+                if not allowed:
+                    return jsonify({
+                        'success': False,
+                        'error': f'You have reached your {feature} limit. Upgrade for more.',
+                        'upgrade_required': True,
+                        'limit_info': info
+                    }), 403
+
+            return f(*args, **kwargs)
+        return decorated_function
+    return decorator
+
+
 # --- Logic Helpers ---
 
 def calculate_next_due_date(current_due, frequency, frequency_type='simple', frequency_config=None):
@@ -403,6 +523,17 @@ def bills_handler():
             result.append(b_dict)
         return jsonify(result)
     else:
+        # Check subscription limits before creating bill
+        user = User.query.get(session.get('user_id'))
+        if user:
+            allowed, info = check_tier_limit(user, 'bills')
+            if not allowed:
+                return jsonify({
+                    'error': f'You have reached your bill limit ({info.get("limit")}). Upgrade for more.',
+                    'upgrade_required': True,
+                    'limit_info': info
+                }), 403
+
         data = request.get_json(); new_bill = Bill(
             database_id=target_db.id, name=data['name'], amount=data.get('amount'),
             is_variable=data.get('varies', False), frequency=data.get('frequency', 'monthly'),
@@ -925,6 +1056,45 @@ def billing_config():
     })
 
 
+@api_v2_bp.route('/billing/usage', methods=['GET'])
+@jwt_required
+def billing_usage():
+    """Get current usage against tier limits."""
+    from config import is_saas, get_tier_limits
+
+    user = User.query.get(g.jwt_user_id)
+    if not user:
+        return jsonify({'success': False, 'error': 'User not found'}), 404
+
+    tier = get_user_effective_tier(user)
+    limits = get_tier_limits(tier)
+
+    # Calculate current usage
+    _, bills_info = check_tier_limit(user, 'bills')
+    _, bill_groups_info = check_tier_limit(user, 'bill_groups')
+
+    return jsonify({
+        'success': True,
+        'data': {
+            'tier': tier,
+            'is_saas': is_saas(),
+            'limits': limits,
+            'usage': {
+                'bills': {
+                    'used': bills_info.get('used', 0),
+                    'limit': bills_info.get('limit', -1),
+                    'unlimited': bills_info.get('unlimited', False),
+                },
+                'bill_groups': {
+                    'used': bill_groups_info.get('used', 0),
+                    'limit': bill_groups_info.get('limit', -1),
+                    'unlimited': bill_groups_info.get('unlimited', False),
+                },
+            }
+        }
+    })
+
+
 @api_v2_bp.route('/billing/create-checkout', methods=['POST'])
 @jwt_required
 def create_checkout():
@@ -937,12 +1107,23 @@ def create_checkout():
     if user.subscription and user.subscription.is_active:
         return jsonify({'success': False, 'error': 'You already have an active subscription'}), 400
 
+    # Get tier and interval from request
+    data = request.get_json() or {}
+    tier = data.get('tier', 'basic')
+    interval = data.get('interval', 'monthly')
+
+    # Validate tier and interval
+    if tier not in ('basic', 'plus'):
+        return jsonify({'success': False, 'error': 'Invalid tier. Must be basic or plus'}), 400
+    if interval not in ('monthly', 'annual'):
+        return jsonify({'success': False, 'error': 'Invalid interval. Must be monthly or annual'}), 400
+
     # Get or create customer ID
     customer_id = None
     if user.subscription and user.subscription.stripe_customer_id:
         customer_id = user.subscription.stripe_customer_id
 
-    result = create_checkout_session(user.id, user.email, customer_id)
+    result = create_checkout_session(user.id, user.email, customer_id, tier, interval)
 
     if 'error' in result:
         return jsonify({'success': False, 'error': result['error']}), 400
@@ -950,10 +1131,12 @@ def create_checkout():
     # Save customer ID if new
     if result.get('customer_id') and not customer_id:
         if not user.subscription:
-            subscription = Subscription(user_id=user.id, status='pending')
+            subscription = Subscription(user_id=user.id, status='pending', tier=tier, billing_interval=interval)
             db.session.add(subscription)
         else:
             subscription = user.subscription
+            subscription.tier = tier
+            subscription.billing_interval = interval
         subscription.stripe_customer_id = result['customer_id']
         db.session.commit()
 
@@ -990,6 +1173,8 @@ def billing_portal():
 @jwt_required
 def billing_status():
     """Get current subscription status."""
+    from config import get_tier_limits
+
     user = User.query.get(g.jwt_user_id)
     if not user:
         return jsonify({'success': False, 'error': 'User not found'}), 404
@@ -1004,9 +1189,14 @@ def billing_status():
                 'has_subscription': False,
                 'is_active': False,
                 'is_trialing': False,
+                'tier': 'free',
+                'effective_tier': 'free',
+                'limits': get_tier_limits('free'),
                 'trial_ends_at': user.trial_ends_at.isoformat() if user.trial_ends_at else None
             }
         })
+
+    effective_tier = subscription.effective_tier
 
     return jsonify({
         'success': True,
@@ -1015,7 +1205,12 @@ def billing_status():
             'has_subscription': True,
             'is_active': subscription.is_active,
             'is_trialing': subscription.is_trialing,
+            'is_trial_expired': subscription.is_trial_expired,
             'plan': subscription.plan,
+            'tier': subscription.tier,
+            'effective_tier': effective_tier,
+            'billing_interval': subscription.billing_interval,
+            'limits': get_tier_limits(effective_tier),
             'trial_ends_at': subscription.trial_ends_at.isoformat() if subscription.trial_ends_at else None,
             'current_period_end': subscription.current_period_end.isoformat() if subscription.current_period_end else None,
             'days_until_renewal': subscription.days_until_renewal
@@ -1045,7 +1240,10 @@ def stripe_webhook():
     try:
         if event_type == 'checkout.session.completed':
             # Payment successful, activate subscription
-            user_id = data.get('metadata', {}).get('user_id')
+            metadata = data.get('metadata', {})
+            user_id = metadata.get('user_id')
+            tier = metadata.get('tier', 'basic')
+            interval = metadata.get('interval', 'monthly')
             customer_id = data.get('customer')
             subscription_id = data.get('subscription')
 
@@ -1061,7 +1259,9 @@ def stripe_webhook():
                     subscription.stripe_customer_id = customer_id
                     subscription.stripe_subscription_id = subscription_id
                     subscription.status = 'active'
-                    subscription.plan = 'early_adopter'
+                    subscription.tier = tier
+                    subscription.billing_interval = interval
+                    subscription.plan = f"{tier}_{interval}"  # e.g., "basic_monthly"
 
                     # Get subscription details from Stripe
                     sub_details = get_subscription(subscription_id)
@@ -1070,7 +1270,7 @@ def stripe_webhook():
                         subscription.current_period_end = datetime.datetime.fromtimestamp(sub_details['current_period_end'])
 
                     db.session.commit()
-                    logger.info(f"Subscription activated for user {user_id}")
+                    logger.info(f"Subscription activated for user {user_id}: {tier}/{interval}")
 
         elif event_type == 'invoice.paid':
             # Recurring payment successful
@@ -1180,6 +1380,7 @@ def jwt_get_bills():
 
 @api_v2_bp.route('/bills', methods=['POST'])
 @jwt_required
+@subscription_required(feature='bills')
 def jwt_create_bill():
     """Create a new bill (JWT version)."""
     if not g.jwt_db_name:

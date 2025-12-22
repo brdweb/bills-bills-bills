@@ -77,11 +77,41 @@ def migrate_20241221_02_add_migrations_index(db):
     pass
 
 
+def migrate_20241222_01_add_subscription_tier(db):
+    """Add tier and billing_interval columns to subscriptions table."""
+    inspector = inspect(db.engine)
+    columns = [col['name'] for col in inspector.get_columns('subscriptions')]
+
+    # Add tier column if not exists
+    if 'tier' not in columns:
+        db.session.execute(text('''
+            ALTER TABLE subscriptions ADD COLUMN tier VARCHAR(20) DEFAULT 'free'
+        '''))
+        logger.info("Added subscriptions.tier column")
+
+    # Add billing_interval column if not exists
+    if 'billing_interval' not in columns:
+        db.session.execute(text('''
+            ALTER TABLE subscriptions ADD COLUMN billing_interval VARCHAR(20) DEFAULT 'monthly'
+        '''))
+        logger.info("Added subscriptions.billing_interval column")
+
+    # Migrate existing early_adopter plans to basic tier
+    db.session.execute(text('''
+        UPDATE subscriptions SET tier = 'basic'
+        WHERE plan = 'early_adopter' AND status IN ('active', 'trialing')
+    '''))
+    logger.info("Migrated early_adopter plans to basic tier")
+
+    db.session.commit()
+
+
 # List of all migrations in order
 # Format: (version, description, function)
 MIGRATIONS = [
     ('20241221_01', 'Increase password_hash column to 256 chars', migrate_20241221_01_password_hash_length),
     ('20241221_02', 'Add migrations tracking index', migrate_20241221_02_add_migrations_index),
+    ('20241222_01', 'Add subscription tier and billing_interval columns', migrate_20241222_01_add_subscription_tier),
 ]
 
 

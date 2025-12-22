@@ -182,8 +182,10 @@ class Subscription(db.Model):
     stripe_customer_id = db.Column(db.String(255), nullable=True)
     stripe_subscription_id = db.Column(db.String(255), nullable=True)
 
-    # Plan info
-    plan = db.Column(db.String(50), default='early_adopter')
+    # Plan and tier info
+    plan = db.Column(db.String(50), default='early_adopter')  # Legacy: early_adopter
+    tier = db.Column(db.String(20), default='free')  # free, basic, plus
+    billing_interval = db.Column(db.String(20), default='monthly')  # monthly, annual
     status = db.Column(db.String(50), default='trialing')  # trialing, active, canceled, past_due, unpaid
 
     # Billing dates
@@ -206,6 +208,27 @@ class Subscription(db.Model):
     @property
     def is_trialing(self):
         return self.status == 'trialing'
+
+    @property
+    def is_trial_expired(self):
+        """Check if trial period has ended without converting to paid"""
+        if self.status != 'trialing':
+            return False
+        if not self.trial_ends_at:
+            return False
+        return datetime.utcnow() > self.trial_ends_at
+
+    @property
+    def effective_tier(self):
+        """Get the effective tier based on subscription status"""
+        # Active paid subscription gets their tier
+        if self.status == 'active' and self.tier in ('basic', 'plus'):
+            return self.tier
+        # Trialing users get basic tier features during trial
+        if self.status == 'trialing' and not self.is_trial_expired:
+            return 'basic'
+        # Expired trial or no subscription = free tier
+        return 'free'
 
     @property
     def days_until_renewal(self):

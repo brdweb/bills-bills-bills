@@ -14,6 +14,10 @@ import {
   List,
   Loader,
   Center,
+  SegmentedControl,
+  SimpleGrid,
+  Progress,
+  ThemeIcon,
 } from '@mantine/core';
 import {
   IconCreditCard,
@@ -21,24 +25,58 @@ import {
   IconAlertCircle,
   IconCrown,
   IconCalendar,
+  IconX,
+  IconRocket,
+  IconUsers,
+  IconFileExport,
+  IconChartBar,
+  IconHeadset,
 } from '@tabler/icons-react';
 import * as api from '../api/client';
-import type { SubscriptionStatus } from '../api/client';
+import type { SubscriptionStatus, BillingUsage } from '../api/client';
+
+interface PlanFeature {
+  name: string;
+  basic: boolean | string;
+  plus: boolean | string;
+}
+
+const PLAN_FEATURES: PlanFeature[] = [
+  { name: 'Unlimited bills', basic: true, plus: true },
+  { name: 'Payment history', basic: true, plus: true },
+  { name: 'Family members', basic: '2 users', plus: '5 users' },
+  { name: 'Bill groups', basic: '1', plus: '3' },
+  { name: 'Export (CSV/PDF)', basic: true, plus: true },
+  { name: 'Analytics charts', basic: true, plus: true },
+  { name: 'Priority support', basic: false, plus: true },
+];
+
+const PRICING = {
+  basic: { monthly: 5, annual: 50 },
+  plus: { monthly: 7.5, annual: 75 },
+};
 
 export function Billing() {
   const [status, setStatus] = useState<SubscriptionStatus | null>(null);
+  const [usage, setUsage] = useState<BillingUsage | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [actionLoading, setActionLoading] = useState(false);
+  const [billingInterval, setBillingInterval] = useState<'monthly' | 'annual'>('monthly');
+  const [selectedTier, setSelectedTier] = useState<'basic' | 'plus'>('basic');
 
   useEffect(() => {
-    fetchStatus();
+    fetchData();
   }, []);
 
-  const fetchStatus = async () => {
+  const fetchData = async () => {
     try {
-      const response = await api.getSubscriptionStatus();
-      setStatus(response.data);
+      const [statusRes, usageRes] = await Promise.all([
+        api.getSubscriptionStatus(),
+        api.getBillingUsage(),
+      ]);
+      setStatus(statusRes.data.data);
+      setUsage(usageRes.data.data);
     } catch {
       setError('Failed to load billing information');
     } finally {
@@ -46,10 +84,10 @@ export function Billing() {
     }
   };
 
-  const handleSubscribe = async () => {
+  const handleSubscribe = async (tier: 'basic' | 'plus') => {
     setActionLoading(true);
     try {
-      const response = await api.createCheckoutSession();
+      const response = await api.createCheckoutSession(tier, billingInterval);
       if (response.data.success && response.data.url) {
         window.location.href = response.data.url;
       } else {
@@ -80,7 +118,7 @@ export function Billing() {
 
   if (loading) {
     return (
-      <Container size="sm" my={40}>
+      <Container size="md" my={40}>
         <Center py="xl">
           <Loader size="lg" />
         </Center>
@@ -90,10 +128,10 @@ export function Billing() {
 
   const getStatusBadge = () => {
     if (!status?.has_subscription) {
-      if (status?.in_trial) {
+      if (status?.is_trialing) {
         return <Badge color="blue" size="lg">Free Trial</Badge>;
       }
-      return <Badge color="gray" size="lg">No Subscription</Badge>;
+      return <Badge color="gray" size="lg">Free</Badge>;
     }
 
     switch (status.status) {
@@ -119,16 +157,39 @@ export function Billing() {
     });
   };
 
+  const formatTierName = (tier?: string) => {
+    if (!tier) return 'Free';
+    return tier.charAt(0).toUpperCase() + tier.slice(1);
+  };
+
+  const renderFeatureValue = (value: boolean | string) => {
+    if (typeof value === 'boolean') {
+      return value ? (
+        <IconCheck size={18} color="var(--mantine-color-green-6)" />
+      ) : (
+        <IconX size={18} color="var(--mantine-color-gray-4)" />
+      );
+    }
+    return <Text size="sm" fw={500}>{value}</Text>;
+  };
+
+  const getAnnualSavings = (tier: 'basic' | 'plus') => {
+    const monthly = PRICING[tier].monthly * 12;
+    const annual = PRICING[tier].annual;
+    return Math.round((1 - annual / monthly) * 100);
+  };
+
   return (
-    <Container size="sm" my={40}>
+    <Container size="md" my={40}>
       <Title ta="center" mb="lg">Billing & Subscription</Title>
 
       {error && (
-        <Alert icon={<IconAlertCircle size={16} />} color="red" variant="light" mb="lg">
+        <Alert icon={<IconAlertCircle size={16} />} color="red" variant="light" mb="lg" onClose={() => setError('')} withCloseButton>
           {error}
         </Alert>
       )}
 
+      {/* Current Plan Status */}
       <Paper withBorder shadow="md" p="lg" radius="md" mb="lg">
         <Group justify="space-between" mb="md">
           <Group>
@@ -138,51 +199,42 @@ export function Billing() {
           {getStatusBadge()}
         </Group>
 
-        {status?.in_trial && status.trial_days_remaining !== undefined && (
+        {status?.is_trial_expired && (
+          <Alert icon={<IconAlertCircle size={16} />} color="orange" variant="light" mb="md">
+            Your trial has expired. Subscribe to continue with full features.
+          </Alert>
+        )}
+
+        {status?.is_trialing && !status.is_trial_expired && status.trial_days_remaining !== undefined && (
           <Alert icon={<IconCalendar size={16} />} color="blue" variant="light" mb="md">
             You have {status.trial_days_remaining} days remaining in your free trial.
             {status.trial_days_remaining <= 3 && ' Subscribe now to keep your data!'}
           </Alert>
         )}
 
-        {status?.cancel_at_period_end && (
-          <Alert icon={<IconAlertCircle size={16} />} color="yellow" variant="light" mb="md">
-            Your subscription will end on {formatDate(status.current_period_end)}.
-            You can resubscribe at any time.
-          </Alert>
-        )}
-
         <Stack gap="xs">
-          {status?.has_subscription ? (
+          <Group justify="space-between">
+            <Text c="dimmed">Current Tier</Text>
+            <Text fw={500}>{formatTierName(status?.effective_tier)}</Text>
+          </Group>
+          {status?.has_subscription && (
             <>
               <Group justify="space-between">
-                <Text c="dimmed">Plan</Text>
-                <Text fw={500}>{status.plan === 'early_adopter' ? 'Early Adopter' : status.plan}</Text>
-              </Group>
-              <Group justify="space-between">
-                <Text c="dimmed">Status</Text>
-                <Text fw={500} tt="capitalize">{status.status}</Text>
+                <Text c="dimmed">Billing</Text>
+                <Text fw={500} tt="capitalize">{status.billing_interval || 'Monthly'}</Text>
               </Group>
               {status.current_period_end && (
                 <Group justify="space-between">
-                  <Text c="dimmed">
-                    {status.cancel_at_period_end ? 'Ends on' : 'Renews on'}
-                  </Text>
+                  <Text c="dimmed">Renews on</Text>
                   <Text fw={500}>{formatDate(status.current_period_end)}</Text>
                 </Group>
               )}
             </>
-          ) : (
-            <Text c="dimmed">
-              {status?.in_trial
-                ? 'You are currently on a free trial. Subscribe to continue after your trial ends.'
-                : 'You do not have an active subscription.'}
-            </Text>
           )}
         </Stack>
 
-        <Group mt="lg">
-          {status?.has_subscription ? (
+        {status?.has_subscription && (
+          <Group mt="lg">
             <Button
               leftSection={<IconCreditCard size={16} />}
               onClick={handleManage}
@@ -190,48 +242,166 @@ export function Billing() {
             >
               Manage Subscription
             </Button>
-          ) : (
-            <Button
-              leftSection={<IconCrown size={16} />}
-              onClick={handleSubscribe}
-              loading={actionLoading}
-            >
-              Subscribe Now
-            </Button>
-          )}
-        </Group>
+          </Group>
+        )}
       </Paper>
 
-      <Card withBorder shadow="sm" radius="md">
-        <Card.Section withBorder inheritPadding py="xs">
-          <Group justify="space-between">
-            <Text fw={500}>Early Adopter Plan</Text>
-            <Badge color="violet">$5/month</Badge>
+      {/* Usage Stats */}
+      {usage && (
+        <Paper withBorder shadow="sm" p="lg" radius="md" mb="lg">
+          <Title order={4} mb="md">Current Usage</Title>
+          <SimpleGrid cols={2}>
+            <div>
+              <Group justify="space-between" mb={4}>
+                <Text size="sm">Bills</Text>
+                <Text size="sm" c="dimmed">
+                  {usage.usage.bills.unlimited ? 'Unlimited' : `${usage.usage.bills.used} / ${usage.usage.bills.limit}`}
+                </Text>
+              </Group>
+              {!usage.usage.bills.unlimited && (
+                <Progress
+                  value={(usage.usage.bills.used / usage.usage.bills.limit) * 100}
+                  color={usage.usage.bills.used >= usage.usage.bills.limit ? 'red' : 'green'}
+                  size="sm"
+                />
+              )}
+            </div>
+            <div>
+              <Group justify="space-between" mb={4}>
+                <Text size="sm">Bill Groups</Text>
+                <Text size="sm" c="dimmed">
+                  {usage.usage.bill_groups.unlimited ? 'Unlimited' : `${usage.usage.bill_groups.used} / ${usage.usage.bill_groups.limit}`}
+                </Text>
+              </Group>
+              {!usage.usage.bill_groups.unlimited && (
+                <Progress
+                  value={(usage.usage.bill_groups.used / usage.usage.bill_groups.limit) * 100}
+                  color={usage.usage.bill_groups.used >= usage.usage.bill_groups.limit ? 'red' : 'green'}
+                  size="sm"
+                />
+              )}
+            </div>
+          </SimpleGrid>
+        </Paper>
+      )}
+
+      {/* Pricing Plans - Only show if not subscribed */}
+      {!status?.has_subscription && (
+        <>
+          <Group justify="center" mb="lg">
+            <SegmentedControl
+              value={billingInterval}
+              onChange={(v) => setBillingInterval(v as 'monthly' | 'annual')}
+              data={[
+                { value: 'monthly', label: 'Monthly' },
+                { value: 'annual', label: `Annual (Save ${getAnnualSavings('basic')}%)` },
+              ]}
+            />
           </Group>
-        </Card.Section>
 
-        <Card.Section inheritPadding py="md">
-          <List
-            spacing="sm"
-            size="sm"
-            icon={<IconCheck size={16} color="var(--mantine-color-green-6)" />}
-          >
-            <List.Item>Unlimited bills and income tracking</List.Item>
-            <List.Item>Up to 5 family members (shared workspaces)</List.Item>
-            <List.Item>Calendar view with due date tracking</List.Item>
-            <List.Item>Payment history and analytics</List.Item>
-            <List.Item>Auto-payment tracking</List.Item>
-            <List.Item>Account-based organization</List.Item>
-            <List.Item>Priority email support</List.Item>
-          </List>
-        </Card.Section>
+          <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="lg" mb="lg">
+            {/* Basic Plan */}
+            <Card withBorder shadow="sm" radius="md" padding="lg">
+              <Card.Section withBorder inheritPadding py="xs">
+                <Group justify="space-between">
+                  <Group>
+                    <ThemeIcon variant="light" color="blue" size="lg">
+                      <IconRocket size={20} />
+                    </ThemeIcon>
+                    <Text fw={600} size="lg">Basic</Text>
+                  </Group>
+                  <Badge color="blue" variant="light">Popular</Badge>
+                </Group>
+              </Card.Section>
 
-        <Card.Section withBorder inheritPadding py="xs">
-          <Text size="xs" c="dimmed">
+              <Card.Section inheritPadding py="md">
+                <Group align="baseline" gap={4}>
+                  <Text size="xl" fw={700}>${billingInterval === 'monthly' ? PRICING.basic.monthly : PRICING.basic.annual}</Text>
+                  <Text size="sm" c="dimmed">/{billingInterval === 'monthly' ? 'month' : 'year'}</Text>
+                </Group>
+                {billingInterval === 'annual' && (
+                  <Text size="xs" c="dimmed">That's ${(PRICING.basic.annual / 12).toFixed(2)}/month</Text>
+                )}
+
+                <List
+                  spacing="sm"
+                  size="sm"
+                  mt="md"
+                  icon={<IconCheck size={16} color="var(--mantine-color-green-6)" />}
+                >
+                  <List.Item>Unlimited bills & income</List.Item>
+                  <List.Item>Up to 2 family members</List.Item>
+                  <List.Item>1 bill group</List.Item>
+                  <List.Item>Export to CSV/PDF</List.Item>
+                  <List.Item>Full analytics</List.Item>
+                </List>
+              </Card.Section>
+
+              <Button
+                fullWidth
+                variant={selectedTier === 'basic' ? 'filled' : 'light'}
+                onClick={() => handleSubscribe('basic')}
+                loading={actionLoading}
+                leftSection={<IconCrown size={16} />}
+              >
+                Get Basic
+              </Button>
+            </Card>
+
+            {/* Plus Plan */}
+            <Card withBorder shadow="sm" radius="md" padding="lg" style={{ borderColor: 'var(--mantine-color-violet-5)', borderWidth: 2 }}>
+              <Card.Section withBorder inheritPadding py="xs">
+                <Group justify="space-between">
+                  <Group>
+                    <ThemeIcon variant="light" color="violet" size="lg">
+                      <IconCrown size={20} />
+                    </ThemeIcon>
+                    <Text fw={600} size="lg">Plus</Text>
+                  </Group>
+                  <Badge color="violet">Best Value</Badge>
+                </Group>
+              </Card.Section>
+
+              <Card.Section inheritPadding py="md">
+                <Group align="baseline" gap={4}>
+                  <Text size="xl" fw={700}>${billingInterval === 'monthly' ? PRICING.plus.monthly : PRICING.plus.annual}</Text>
+                  <Text size="sm" c="dimmed">/{billingInterval === 'monthly' ? 'month' : 'year'}</Text>
+                </Group>
+                {billingInterval === 'annual' && (
+                  <Text size="xs" c="dimmed">That's ${(PRICING.plus.annual / 12).toFixed(2)}/month</Text>
+                )}
+
+                <List
+                  spacing="sm"
+                  size="sm"
+                  mt="md"
+                  icon={<IconCheck size={16} color="var(--mantine-color-green-6)" />}
+                >
+                  <List.Item>Everything in Basic</List.Item>
+                  <List.Item>Up to 5 family members</List.Item>
+                  <List.Item>3 bill groups</List.Item>
+                  <List.Item>Priority support</List.Item>
+                  <List.Item>Early access to new features</List.Item>
+                </List>
+              </Card.Section>
+
+              <Button
+                fullWidth
+                color="violet"
+                onClick={() => handleSubscribe('plus')}
+                loading={actionLoading}
+                leftSection={<IconCrown size={16} />}
+              >
+                Get Plus
+              </Button>
+            </Card>
+          </SimpleGrid>
+
+          <Text size="sm" c="dimmed" ta="center">
             14-day free trial included. Cancel anytime.
           </Text>
-        </Card.Section>
-      </Card>
+        </>
+      )}
 
       <Text size="sm" c="dimmed" ta="center" mt="lg">
         Need help?{' '}

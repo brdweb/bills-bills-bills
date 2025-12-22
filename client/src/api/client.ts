@@ -245,15 +245,48 @@ export interface BillingConfig {
   enabled: boolean;
 }
 
+export interface TierLimits {
+  bills: number;
+  users: number;
+  bill_groups: number;
+  export: boolean;
+  full_analytics: boolean;
+  priority_support: boolean;
+}
+
 export interface SubscriptionStatus {
   has_subscription: boolean;
   status?: string;
   plan?: string;
+  tier?: string;
+  effective_tier?: string;
+  billing_interval?: string;
+  limits?: TierLimits;
+  is_active?: boolean;
+  is_trialing?: boolean;
+  is_trial_expired?: boolean;
   trial_ends_at?: string;
   current_period_end?: string;
   cancel_at_period_end?: boolean;
   in_trial?: boolean;
   trial_days_remaining?: number;
+  days_until_renewal?: number;
+}
+
+export interface UsageInfo {
+  used: number;
+  limit: number;
+  unlimited: boolean;
+}
+
+export interface BillingUsage {
+  tier: string;
+  is_saas: boolean;
+  limits: TierLimits;
+  usage: {
+    bills: UsageInfo;
+    bill_groups: UsageInfo;
+  };
 }
 
 export interface CheckoutResponse {
@@ -266,10 +299,13 @@ export const getBillingConfig = () =>
   api.get<BillingConfig>('/api/v2/billing/config');
 
 export const getSubscriptionStatus = () =>
-  api.get<SubscriptionStatus>('/api/v2/billing/status');
+  api.get<{ success: boolean; data: SubscriptionStatus }>('/api/v2/billing/status');
 
-export const createCheckoutSession = () =>
-  api.post<CheckoutResponse>('/api/v2/billing/create-checkout');
+export const getBillingUsage = () =>
+  api.get<{ success: boolean; data: BillingUsage }>('/api/v2/billing/usage');
+
+export const createCheckoutSession = (tier: string = 'basic', interval: string = 'monthly') =>
+  api.post<CheckoutResponse>('/api/v2/billing/create-checkout', { tier, interval });
 
 export const createPortalSession = () =>
   api.post<CheckoutResponse>('/api/v2/billing/portal');
