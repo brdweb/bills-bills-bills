@@ -34,10 +34,8 @@ GEMINI.md
 # Test files
 test_*.py
 
-# Marketing site build output (source is tracked)
-marketing/dist/
-marketing/node_modules/
-marketing/.astro/
+# Marketing site is in separate repo (git.brdweb.com/brdweb/billmanager-marketing)
+marketing/
 
 # Environment files (contain secrets)
 .env
