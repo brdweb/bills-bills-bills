@@ -23,6 +23,7 @@ export function MonthlyTotalsChart({ opened, onClose }: MonthlyTotalsChartProps)
   useEffect(() => {
     if (opened) {
       fetchData();
+      window.umami?.track('view_spending_trends');
     }
   }, [opened]);
 

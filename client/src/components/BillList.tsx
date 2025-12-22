@@ -248,13 +248,19 @@ export function BillList({
               <Menu.Label>Export bills</Menu.Label>
               <Menu.Item
                 leftSection={<IconFileTypeCsv size={16} />}
-                onClick={() => exportBillsToCSV(bills)}
+                onClick={() => {
+                  exportBillsToCSV(bills);
+                  window.umami?.track('export_bills', { format: 'csv' });
+                }}
               >
                 Export as CSV
               </Menu.Item>
               <Menu.Item
                 leftSection={<IconFileTypePdf size={16} />}
-                onClick={() => exportBillsToPDF(bills)}
+                onClick={() => {
+                  exportBillsToPDF(bills);
+                  window.umami?.track('export_bills', { format: 'pdf' });
+                }}
               >
                 Export as PDF
               </Menu.Item>

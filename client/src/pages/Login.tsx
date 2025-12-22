@@ -130,6 +130,7 @@ export function Login() {
       });
       if (response.data.success) {
         setSignupSuccess(true);
+        window.umami?.track('user_registered');
       } else {
         setSignupError(response.data.error || 'Registration failed');
       }

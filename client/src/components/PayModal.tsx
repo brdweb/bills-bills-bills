@@ -39,6 +39,7 @@ export function PayModal({ opened, onClose, onPay, bill }: PayModalProps) {
     setLoading(true);
     try {
       await onPay(amount as number, advanceDue);
+      window.umami?.track('payment_recorded', { type: isDeposit ? 'deposit' : 'expense' });
       onClose();
     } finally {
       setLoading(false);

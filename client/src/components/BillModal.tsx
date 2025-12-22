@@ -237,6 +237,7 @@ export function BillModal({ opened, onClose, onSave, onArchive, onUnarchive, onD
       console.log('📤 BillModal: Saving bill with data:', billData);
       console.log('📤 BillModal: Type =', values.type, 'Account =', values.account);
       await onSave(billData);
+      window.umami?.track(bill ? 'bill_updated' : 'bill_created', { type: values.type });
       onClose();
     } finally {
       setLoading(false);

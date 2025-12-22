@@ -67,6 +67,7 @@ export function Billing() {
     try {
       const response = await api.createCheckoutSession(tier, billingInterval);
       if (response.data.success && response.data.url) {
+        window.umami?.track('checkout_started', { tier, interval: billingInterval });
         window.location.href = response.data.url;
       } else {
         setError(response.data.error || 'Failed to create checkout session');
