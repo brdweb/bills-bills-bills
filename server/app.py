@@ -598,11 +598,15 @@ def update_user(user_id):
 def delete_user(user_id):
     if user_id == session.get('user_id'): return jsonify({'error': 'Self'}), 400
     user = User.query.get_or_404(user_id)
-    # In SaaS mode, only allow deleting users you created (or legacy users with NULL created_by_id)
+    # In SaaS mode, check permissions
     if is_saas():
         current_user_id = session.get('user_id')
-        # Allow deletion if: user was created by current admin, OR user is a legacy user (NULL created_by_id)
-        if user.created_by_id is not None and user.created_by_id != current_user_id:
+        current_user = User.query.get(current_user_id)
+        # Account owners can delete any user (except themselves, checked above)
+        if current_user.is_account_owner:
+            pass  # Allow deletion
+        # Non-owner admins can only delete users they created or legacy users
+        elif user.created_by_id is not None and user.created_by_id != current_user_id:
             return jsonify({'error': 'Access denied'}), 403
     db.session.delete(user); db.session.commit(); return jsonify({'message': 'Deleted'})
 
@@ -968,7 +972,7 @@ def process_auto_payments():
 
 @api_bp.route('/api/version', methods=['GET'])
 def get_version():
-    return jsonify({'version': '3.3.0', 'license': "O'Saasy", 'license_url': 'https://osaasy.dev/', 'features': ['enhanced_frequencies', 'auto_payments', 'postgresql_saas', 'row_tenancy', 'user_invites']})
+    return jsonify({'version': '3.3.1', 'license': "O'Saasy", 'license_url': 'https://osaasy.dev/', 'features': ['enhanced_frequencies', 'auto_payments', 'postgresql_saas', 'row_tenancy', 'user_invites']})
 
 @api_bp.route('/ping')
 def ping(): return jsonify({'status': 'ok'})
@@ -2129,7 +2133,7 @@ def jwt_get_version():
     return jsonify({
         'success': True,
         'data': {
-            'version': '3.3.0',
+            'version': '3.3.1',
             'api_version': 'v2',
             'license': "O'Saasy",
             'license_url': 'https://osaasy.dev/',
