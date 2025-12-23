@@ -178,16 +178,22 @@ server {
 }
 ```
 
-## Creating Additional Users
+## Inviting Users
 
-In self-hosted mode with registration disabled, create users via the admin panel:
+In self-hosted mode, invite users via email through the admin panel:
 
 1. Log in as admin
 2. Click the "Admin" button in the header
 3. Navigate to "Users" tab
-4. Click "Add User"
+4. Click "Invite User"
+5. Enter the user's email address
+6. Select their role (User or Admin)
+7. Select which Bill Groups they should access
+8. Click "Send Invitation"
 
-New users will be prompted to change their password on first login.
+The invited user will receive an email with a link to create their account. They'll set their own username and password.
+
+**Note:** Email invitations require Resend to be configured (see environment variables above). Without email configuration, invitations will be created but the email won't be sent.
 
 ## Backup and Restore
 

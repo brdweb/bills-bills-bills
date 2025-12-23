@@ -14,13 +14,19 @@ A **secure multi-user** web application for tracking recurring expenses and inco
 - **Auto-Payments**: Automatic payment processing for recurring transactions
 - **Modern UI**: Responsive design with dark/light mode, 70+ custom icons, and visual calendar
 
-## What's New in v3.2
+## What's New in v3.3
+
+- **Email-Based User Invites**: Invite users via email - they set their own username/password
+- **Improved Admin Panel**: Manage users, view pending invitations, cancel invites
+- **Account Owner Permissions**: Full control over user management for account owners
+- **Python 3.12+ Support**: Updated datetime handling for latest Python versions
+
+### Previous Updates (v3.2)
 
 - **Mobile API (v2)**: JWT-based API with Swagger documentation at `/api/v2/docs`
 - **Enhanced Security**: Dual authentication support, improved session handling
 - **Bill Groups**: Organize bills into groups for better management
 - **Export Features**: Export bills and payments to CSV/PDF
-- **Improved UI**: Back navigation, better mobile responsiveness
 - **Docker Health Checks**: Built-in container health monitoring
 
 ### Previous Updates (v3.0)
@@ -207,9 +213,10 @@ After login, select your database from the dropdown:
 3. Complete data isolation between databases
 
 ### User Management
-1. Add new users through the Admin Panel
-2. Assign admin privileges when needed
-3. Control database access permissions
+1. **Invite users** via email through Admin Panel → Users → Invite User
+2. Select role (User or Admin) and Bill Group access when inviting
+3. Users receive an email link to set their own username and password
+4. Manage pending invitations and cancel if needed
 
 ## Application Management
 
