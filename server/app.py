@@ -223,6 +223,35 @@ def jwt_admin_required(f):
         return f(*args, **kwargs)
     return decorated_function
 
+def auth_required(f):
+    """Decorator that accepts both session auth (web) and JWT auth (mobile).
+    Sets g.auth_user_id regardless of auth method used."""
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        # Try JWT auth first (check Authorization header)
+        auth_header = request.headers.get('Authorization')
+        if auth_header and auth_header.startswith('Bearer '):
+            token = auth_header.split(' ')[1]
+            payload = verify_access_token(token)
+            if payload:
+                g.auth_user_id = payload['user_id']
+                g.auth_role = payload['role']
+                g.auth_method = 'jwt'
+                return f(*args, **kwargs)
+            return jsonify({'success': False, 'error': 'Invalid or expired token'}), 401
+
+        # Fall back to session auth
+        if 'user_id' in session:
+            if not check_csrf():
+                return jsonify({'success': False, 'error': 'CSRF validation failed'}), 403
+            g.auth_user_id = session['user_id']
+            g.auth_role = session.get('role', 'user')
+            g.auth_method = 'session'
+            return f(*args, **kwargs)
+
+        return jsonify({'success': False, 'error': 'Authentication required'}), 401
+    return decorated_function
+
 # --- Subscription & Tier Helpers ---
 
 def get_user_effective_tier(user):
@@ -736,7 +765,7 @@ def process_auto_payments():
 
 @api_bp.route('/api/version', methods=['GET'])
 def get_version():
-    return jsonify({'version': '3.2.7', 'license': "O'Saasy", 'license_url': 'https://osaasy.dev/', 'features': ['enhanced_frequencies', 'auto_payments', 'postgresql_saas', 'row_tenancy']})
+    return jsonify({'version': '3.2.8', 'license': "O'Saasy", 'license_url': 'https://osaasy.dev/', 'features': ['enhanced_frequencies', 'auto_payments', 'postgresql_saas', 'row_tenancy']})
 
 @api_bp.route('/ping')
 def ping(): return jsonify({'status': 'ok'})
@@ -1122,12 +1151,12 @@ def billing_config():
 
 
 @api_v2_bp.route('/billing/usage', methods=['GET'])
-@jwt_required
+@auth_required
 def billing_usage():
     """Get current usage against tier limits."""
     from config import is_saas, get_tier_limits
 
-    user = User.query.get(g.jwt_user_id)
+    user = User.query.get(g.auth_user_id)
     if not user:
         return jsonify({'success': False, 'error': 'User not found'}), 404
 
@@ -1161,10 +1190,10 @@ def billing_usage():
 
 
 @api_v2_bp.route('/billing/create-checkout', methods=['POST'])
-@jwt_required
+@auth_required
 def create_checkout():
     """Create a Stripe Checkout session for subscription."""
-    user = User.query.get(g.jwt_user_id)
+    user = User.query.get(g.auth_user_id)
     if not user:
         return jsonify({'success': False, 'error': 'User not found'}), 404
 
@@ -1213,10 +1242,10 @@ def create_checkout():
 
 
 @api_v2_bp.route('/billing/portal', methods=['POST'])
-@jwt_required
+@auth_required
 def billing_portal():
     """Create a Stripe Customer Portal session for subscription management."""
-    user = User.query.get(g.jwt_user_id)
+    user = User.query.get(g.auth_user_id)
     if not user:
         return jsonify({'success': False, 'error': 'User not found'}), 404
 
@@ -1235,12 +1264,12 @@ def billing_portal():
 
 
 @api_v2_bp.route('/billing/change-plan', methods=['POST'])
-@jwt_required
+@auth_required
 def change_plan():
     """Change subscription plan (upgrade or downgrade)."""
     from config import get_stripe_price_id
 
-    user = User.query.get(g.jwt_user_id)
+    user = User.query.get(g.auth_user_id)
     if not user:
         return jsonify({'success': False, 'error': 'User not found'}), 404
 
@@ -1297,12 +1326,12 @@ def change_plan():
 
 
 @api_v2_bp.route('/billing/status', methods=['GET'])
-@jwt_required
+@auth_required
 def billing_status():
     """Get current subscription status."""
     from config import get_tier_limits
 
-    user = User.query.get(g.jwt_user_id)
+    user = User.query.get(g.auth_user_id)
     if not user:
         return jsonify({'success': False, 'error': 'User not found'}), 404
 
@@ -1340,6 +1369,7 @@ def billing_status():
             'limits': get_tier_limits(effective_tier),
             'trial_ends_at': subscription.trial_ends_at.isoformat() if subscription.trial_ends_at else None,
             'current_period_end': subscription.current_period_end.isoformat() if subscription.current_period_end else None,
+            'canceled_at': subscription.canceled_at.isoformat() if subscription.canceled_at else None,
             'days_until_renewal': subscription.days_until_renewal
         }
     })
@@ -1896,7 +1926,7 @@ def jwt_get_version():
     return jsonify({
         'success': True,
         'data': {
-            'version': '3.2.7',
+            'version': '3.2.8',
             'api_version': 'v2',
             'license': "O'Saasy",
             'license_url': 'https://osaasy.dev/',
