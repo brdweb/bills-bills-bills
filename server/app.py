@@ -298,14 +298,27 @@ def check_tier_limit(user, feature: str) -> tuple[bool, dict]:
 
     # Count current usage
     if feature == 'bills':
-        # Count active (non-archived) bills across all user's databases
+        # Count active (non-archived) bills across user's databases
         from models import Bill
-        used = Bill.query.join(Database).filter(
-            Database.id.in_([db.id for db in user.accessible_databases]),
-            Bill.archived == False
-        ).count()
+        if is_saas():
+            # In SaaS mode, count bills in databases owned by this user
+            used = Bill.query.join(Database).filter(
+                Database.owner_id == user.id,
+                Bill.archived == False
+            ).count()
+        else:
+            # In self-hosted mode, count bills in accessible databases
+            used = Bill.query.join(Database).filter(
+                Database.id.in_([db.id for db in user.accessible_databases]),
+                Bill.archived == False
+            ).count()
     elif feature == 'bill_groups':
-        used = len(user.accessible_databases)
+        # In SaaS mode, count databases owned by this user
+        # In self-hosted mode, count databases accessible to this user
+        if is_saas():
+            used = Database.query.filter_by(owner_id=user.id).count()
+        else:
+            used = len(user.accessible_databases)
     elif feature == 'users':
         # For now, just return limit (user management is admin-level)
         used = 1
@@ -765,7 +778,7 @@ def process_auto_payments():
 
 @api_bp.route('/api/version', methods=['GET'])
 def get_version():
-    return jsonify({'version': '3.2.9', 'license': "O'Saasy", 'license_url': 'https://osaasy.dev/', 'features': ['enhanced_frequencies', 'auto_payments', 'postgresql_saas', 'row_tenancy']})
+    return jsonify({'version': '3.2.10', 'license': "O'Saasy", 'license_url': 'https://osaasy.dev/', 'features': ['enhanced_frequencies', 'auto_payments', 'postgresql_saas', 'row_tenancy']})
 
 @api_bp.route('/ping')
 def ping(): return jsonify({'status': 'ok'})
@@ -1926,7 +1939,7 @@ def jwt_get_version():
     return jsonify({
         'success': True,
         'data': {
-            'version': '3.2.9',
+            'version': '3.2.10',
             'api_version': 'v2',
             'license': "O'Saasy",
             'license_url': 'https://osaasy.dev/',
