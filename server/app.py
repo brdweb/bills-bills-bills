@@ -736,7 +736,7 @@ def process_auto_payments():
 
 @api_bp.route('/api/version', methods=['GET'])
 def get_version():
-    return jsonify({'version': '3.2.6', 'license': "O'Saasy", 'license_url': 'https://osaasy.dev/', 'features': ['enhanced_frequencies', 'auto_payments', 'postgresql_saas', 'row_tenancy']})
+    return jsonify({'version': '3.2.7', 'license': "O'Saasy", 'license_url': 'https://osaasy.dev/', 'features': ['enhanced_frequencies', 'auto_payments', 'postgresql_saas', 'row_tenancy']})
 
 @api_bp.route('/ping')
 def ping(): return jsonify({'status': 'ok'})
@@ -1281,9 +1281,12 @@ def change_plan():
         return jsonify({'success': False, 'error': result['error']}), 400
 
     # Update local subscription record
-    user.subscription.tier = new_tier
-    user.subscription.billing_interval = new_interval
-    db.session.commit()
+    # For upgrades: update immediately. For downgrades: keep current tier until period ends
+    if is_upgrade:
+        user.subscription.tier = new_tier
+        user.subscription.billing_interval = new_interval
+        db.session.commit()
+    # For downgrades, Stripe will handle the change at period end via webhook
 
     return jsonify({
         'success': True,
@@ -1432,7 +1435,7 @@ def stripe_webhook():
                     logger.info(f"Subscription canceled: {subscription_id}")
 
         elif event_type == 'customer.subscription.updated':
-            # Subscription updated (status change, etc.)
+            # Subscription updated (status change, plan change, etc.)
             subscription_id = data.get('id')
             status = data.get('status')
             if subscription_id:
@@ -1441,8 +1444,26 @@ def stripe_webhook():
                     subscription.status = status
                     if data.get('cancel_at_period_end'):
                         subscription.canceled_at = datetime.datetime.utcnow()
+
+                    # Update tier from current subscription items (handles scheduled downgrades)
+                    items = data.get('items', {}).get('data', [])
+                    if items:
+                        price_id = items[0].get('price', {}).get('id', '')
+                        # Determine tier from price ID
+                        if 'plus' in price_id.lower():
+                            subscription.tier = 'plus'
+                        elif 'basic' in price_id.lower():
+                            subscription.tier = 'basic'
+                        # Update billing interval
+                        interval = items[0].get('price', {}).get('recurring', {}).get('interval', 'month')
+                        subscription.billing_interval = 'annual' if interval == 'year' else 'monthly'
+
+                    # Update period end
+                    if data.get('current_period_end'):
+                        subscription.current_period_end = datetime.datetime.fromtimestamp(data['current_period_end'])
+
                     db.session.commit()
-                    logger.info(f"Subscription updated: {subscription_id} -> {status}")
+                    logger.info(f"Subscription updated: {subscription_id} -> {status}, tier: {subscription.tier}")
 
     except Exception as e:
         logger.error(f"Webhook processing error: {e}")
@@ -1875,7 +1896,7 @@ def jwt_get_version():
     return jsonify({
         'success': True,
         'data': {
-            'version': '3.2.6',
+            'version': '3.2.7',
             'api_version': 'v2',
             'license': "O'Saasy",
             'license_url': 'https://osaasy.dev/',
