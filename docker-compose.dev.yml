@@ -1,0 +1,27 @@
+services:
+  billmanager-app:
+    build: .
+    container_name: billmanager
+    ports:
+      - "5000:5000"
+    restart: unless-stopped
+    environment:
+      - DATABASE_URL=postgresql://billsuser:billspass@db:5432/billsdb
+      - FLASK_SECRET_KEY=dev-secret-key-change-in-prod
+      - DEPLOYMENT_MODE=self-hosted
+    depends_on:
+      - db
+
+  db:
+    image: postgres:16-alpine
+    container_name: bills-db
+    restart: unless-stopped
+    environment:
+      - POSTGRES_USER=billsuser
+      - POSTGRES_PASSWORD=billspass
+      - POSTGRES_DB=billsdb
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+volumes:
+  postgres_data:

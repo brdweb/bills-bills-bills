@@ -1,29 +1,41 @@
+# BillManager - Docker Compose
+# Update the environment variables before running: docker compose up -d
+
 services:
-  billmanager-app:
-    build: .
-    container_name: billmanager
+  billmanager:
+    image: ghcr.io/brdweb/billmanager:latest
     ports:
       - "5000:5000"
-    restart: unless-stopped
     environment:
-      - DATABASE_URL=postgresql://billsuser:billspass@db:5432/billsdb
-      - FLASK_SECRET_KEY=dev-secret-key-change-in-prod
-    volumes:
-      - ./data:/app/data
-      - ./dbs:/app/dbs
+      # Required - generate with: openssl rand -hex 32
+      - FLASK_SECRET_KEY=change-me-generate-with-openssl
+      - JWT_SECRET_KEY=change-me-generate-with-openssl
+      - DATABASE_URL=postgresql://billsuser:change-me@db:5432/billmanager
+
+      # Deployment mode (self-hosted or saas)
+      - DEPLOYMENT_MODE=self-hosted
+
+      # Registration settings (optional)
+      # - ENABLE_REGISTRATION=true  # Allow public registration
+      # - REQUIRE_EMAIL_VERIFICATION=true  # Require email verification
+
+      # Email settings (optional - for password reset and verification)
+      # - RESEND_API_KEY=re_your_api_key
+      # - FROM_EMAIL=noreply@yourdomain.com
+      # - APP_URL=https://bills.yourdomain.com
     depends_on:
       - db
+    restart: unless-stopped
 
   db:
     image: postgres:16-alpine
-    container_name: bills-db
-    restart: unless-stopped
     environment:
       - POSTGRES_USER=billsuser
-      - POSTGRES_PASSWORD=billspass
-      - POSTGRES_DB=billsdb
+      - POSTGRES_PASSWORD=change-me  # Match DATABASE_URL password
+      - POSTGRES_DB=billmanager
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    restart: unless-stopped
 
 volumes:
   postgres_data:

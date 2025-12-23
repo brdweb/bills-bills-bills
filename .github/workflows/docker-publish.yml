@@ -46,4 +46,4 @@ jobs:
             org.opencontainers.image.description=Secure expense tracker with multi-database support
             org.opencontainers.image.source=https://github.com/${{ github.repository }}
             org.opencontainers.image.revision=${{ github.sha }}
-            org.opencontainers.image.licenses=MIT
+            org.opencontainers.image.licenses=O'Saasy

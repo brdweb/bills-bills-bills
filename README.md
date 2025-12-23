@@ -14,13 +14,21 @@ A **secure multi-user** web application for tracking recurring expenses and inco
 - **Auto-Payments**: Automatic payment processing for recurring transactions
 - **Modern UI**: Responsive design with dark/light mode, 70+ custom icons, and visual calendar
 
-## What's New in v3.0
+## What's New in v3.2
 
-- **PostgreSQL Backend**: Migrated from SQLite to PostgreSQL for improved scalability and SaaS readiness
+- **Mobile API (v2)**: JWT-based API with Swagger documentation at `/api/v2/docs`
+- **Enhanced Security**: Dual authentication support, improved session handling
+- **Bill Groups**: Organize bills into groups for better management
+- **Export Features**: Export bills and payments to CSV/PDF
+- **Improved UI**: Back navigation, better mobile responsiveness
+- **Docker Health Checks**: Built-in container health monitoring
+
+### Previous Updates (v3.0)
+
+- **PostgreSQL Backend**: Migrated from SQLite to PostgreSQL for improved scalability
 - **Row-Level Tenancy**: Single database with complete data isolation between user groups
 - **SQLAlchemy ORM**: Modern database models with migration support
-- **O'Saasy License**: New license permits broad use while reserving SaaS commercialization rights
-- **Bug Fixes**: Fixed SPA routing, calendar badge positioning, and API caching issues
+- **O'Saasy License**: Permits broad use while reserving SaaS commercialization rights
 
 ## License
 
@@ -134,8 +142,9 @@ postgresql://USERNAME:PASSWORD@HOST:PORT/DATABASE
 |----------|-------------|---------|
 | `DATABASE_URL` | PostgreSQL connection string | `postgresql://billsuser:billspass@db:5432/billsdb` |
 | `FLASK_SECRET_KEY` | Secret key for session encryption | Auto-generated (set in production!) |
+| `JWT_SECRET_KEY` | Secret key for mobile API tokens | Falls back to `FLASK_SECRET_KEY` |
 
-**Security Note:** Always set a strong, unique `FLASK_SECRET_KEY` in production environments.
+**Security Note:** Always set strong, unique secret keys in production. Generate with: `openssl rand -hex 32`
 
 ## First Login
 

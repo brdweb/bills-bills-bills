@@ -27,9 +27,11 @@ dbs/
 logs/
 client-backup/
 
-# Debug and handoff docs
+# Internal docs (not for public repo)
 HANDOFF_DEBUG.md
 GEMINI.md
+GO_TO_MARKET*.md
+docs/GO_TO_MARKET*.md
 
 # Test files
 test_*.py
