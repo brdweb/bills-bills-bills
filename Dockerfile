@@ -9,7 +9,7 @@ RUN npm ci
 
 # Copy source and build
 COPY client/ ./
-RUN npm run build
+RUN npm run build && ls -la dist/ && test -f dist/index.html
 
 # Stage 2: Python backend with built frontend
 FROM python:3.12-slim
