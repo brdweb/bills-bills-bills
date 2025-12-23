@@ -129,6 +129,44 @@ def migrate_20241223_01_add_saas_tenancy_columns(db):
     db.session.commit()
 
 
+def migrate_20241223_02_backfill_tenancy_ownership(db):
+    """Backfill owner_id and created_by_id for existing data.
+
+    For existing installations upgrading to SaaS multi-tenancy:
+    - Set databases.owner_id to the first admin user for databases with NULL owner
+    - Set users.created_by_id to the first admin user for users with NULL creator
+    """
+    # Find the first admin user (usually the original admin)
+    result = db.session.execute(text('''
+        SELECT id FROM users WHERE role = 'admin' ORDER BY id LIMIT 1
+    '''))
+    row = result.fetchone()
+
+    if not row:
+        logger.warning("No admin user found, skipping tenancy backfill")
+        return
+
+    first_admin_id = row[0]
+    logger.info(f"Using admin user ID {first_admin_id} for backfill")
+
+    # Backfill databases.owner_id
+    result = db.session.execute(text('''
+        UPDATE databases SET owner_id = :admin_id WHERE owner_id IS NULL
+    '''), {'admin_id': first_admin_id})
+    db_count = result.rowcount
+    logger.info(f"Set owner_id for {db_count} database(s)")
+
+    # Backfill users.created_by_id (except for the admin themselves)
+    result = db.session.execute(text('''
+        UPDATE users SET created_by_id = :admin_id
+        WHERE created_by_id IS NULL AND id != :admin_id
+    '''), {'admin_id': first_admin_id})
+    user_count = result.rowcount
+    logger.info(f"Set created_by_id for {user_count} user(s)")
+
+    db.session.commit()
+
+
 # List of all migrations in order
 # Format: (version, description, function)
 MIGRATIONS = [
@@ -136,6 +174,7 @@ MIGRATIONS = [
     ('20241221_02', 'Add migrations tracking index', migrate_20241221_02_add_migrations_index),
     ('20241222_01', 'Add subscription tier and billing_interval columns', migrate_20241222_01_add_subscription_tier),
     ('20241223_01', 'Add SaaS multi-tenancy columns (owner_id, created_by_id)', migrate_20241223_01_add_saas_tenancy_columns),
+    ('20241223_02', 'Backfill owner_id and created_by_id for existing data', migrate_20241223_02_backfill_tenancy_ownership),
 ]
 
 
