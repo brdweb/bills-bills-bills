@@ -45,9 +45,9 @@ api_v2_bp = Blueprint('api_v2', __name__, url_prefix='/api/v2')
 spa_bp = Blueprint('spa', __name__)
 
 # --- Rate Limiter (initialized in create_app) ---
+# No default limits - only apply rate limiting to sensitive endpoints (auth)
 limiter = Limiter(
     key_func=get_remote_address,
-    default_limits=["200 per day", "50 per hour"],
     storage_uri="memory://",
 )
 
