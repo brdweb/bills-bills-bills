@@ -1848,10 +1848,10 @@ def create_app():
             strict_transport_security_max_age=31536000,
             content_security_policy={
                 'default-src': "'self'",
-                'script-src': ["'self'", "'unsafe-inline'", "unpkg.com"],  # Swagger UI needs these
+                'script-src': ["'self'", "'unsafe-inline'", "unpkg.com", "analytics.billmanager.app"],  # Swagger UI + Umami
                 'style-src': ["'self'", "'unsafe-inline'", "unpkg.com"],
-                'img-src': ["'self'", "data:"],
-                'connect-src': ["'self'"],
+                'img-src': ["'self'", "data:", "billmanager.app"],
+                'connect-src': ["'self'", "analytics.billmanager.app"],  # Umami analytics
             },
             referrer_policy='strict-origin-when-cross-origin',
             x_content_type_options=True,
