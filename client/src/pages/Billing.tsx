@@ -26,6 +26,7 @@ import {
   IconCrown,
   IconCalendar,
   IconRocket,
+  IconArrowLeft,
 } from '@tabler/icons-react';
 import * as api from '../api/client';
 import type { SubscriptionStatus, BillingUsage } from '../api/client';
@@ -149,6 +150,15 @@ export function Billing() {
 
   return (
     <Container size="md" my={40}>
+      <Button
+        component={Link}
+        to="/"
+        variant="subtle"
+        leftSection={<IconArrowLeft size={16} />}
+        mb="md"
+      >
+        Back to Bills
+      </Button>
       <Title ta="center" mb="lg">Billing & Subscription</Title>
 
       {error && (
