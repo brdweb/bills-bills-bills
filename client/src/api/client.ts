@@ -89,6 +89,7 @@ export interface MeResponse {
   role: 'admin' | 'user';
   current_db: string | null;
   databases: Database[];
+  is_account_owner?: boolean;
 }
 
 // Auth API
