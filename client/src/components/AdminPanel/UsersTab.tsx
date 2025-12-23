@@ -57,14 +57,21 @@ export function UsersTab() {
   const fetchData = async () => {
     setLoading(true);
     try {
-      const [usersRes, dbsRes, invitesRes] = await Promise.all([
+      const [usersRes, dbsRes] = await Promise.all([
         getUsers(),
         getDatabases(),
-        getInvites(),
       ]);
       setUsers(usersRes.data);
       setDatabases(dbsRes.data);
-      setInvites(invitesRes.data);
+
+      // Fetch invites separately so it doesn't break if table doesn't exist yet
+      try {
+        const invitesRes = await getInvites();
+        setInvites(invitesRes.data);
+      } catch (inviteError) {
+        console.error('Failed to fetch invites:', inviteError);
+        setInvites([]);
+      }
     } catch (error) {
       console.error('Failed to fetch data:', error);
     } finally {
