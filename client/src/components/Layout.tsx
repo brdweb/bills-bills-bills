@@ -9,7 +9,7 @@ import {
   Burger,
 } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
-import { IconSun, IconMoon, IconSettings, IconLogout } from '@tabler/icons-react';
+import { IconSun, IconMoon, IconSettings, IconLogout, IconCreditCard } from '@tabler/icons-react';
 import { useAuth } from '../context/AuthContext';
 import type { ReactNode } from 'react';
 
@@ -17,9 +17,10 @@ interface LayoutProps {
   children: ReactNode;
   sidebar: ReactNode;
   onAdminClick: () => void;
+  onBillingClick?: () => void;
 }
 
-export function Layout({ children, sidebar, onAdminClick }: LayoutProps) {
+export function Layout({ children, sidebar, onAdminClick, onBillingClick }: LayoutProps) {
   const { colorScheme, toggleColorScheme } = useMantineColorScheme();
   const [opened, { toggle }] = useDisclosure();
   const { isLoggedIn, isAdmin, databases, currentDb, selectDatabase, logout } = useAuth();
@@ -70,6 +71,17 @@ export function Layout({ children, sidebar, onAdminClick }: LayoutProps) {
 
             {isLoggedIn && (
               <Group gap="xs">
+                {isAdmin && onBillingClick && (
+                  <Button
+                    variant="light"
+                    color="billGreen"
+                    size="sm"
+                    leftSection={<IconCreditCard size={16} />}
+                    onClick={onBillingClick}
+                  >
+                    Billing
+                  </Button>
+                )}
                 {isAdmin && (
                   <Button
                     variant="light"

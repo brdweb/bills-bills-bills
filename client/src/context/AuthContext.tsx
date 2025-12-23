@@ -51,7 +51,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const response = await api.getMe();
       setState({
         isLoggedIn: true,
-        isAdmin: response.data.role === 'admin',
+        // Use is_account_owner from API (true for account owners who can access admin/billing)
+        isAdmin: response.data.is_account_owner ?? response.data.role === 'admin',
         role: response.data.role,
         databases: response.data.databases,
         currentDb: response.data.current_db,
@@ -92,7 +93,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       setState({
         isLoggedIn: true,
-        isAdmin: response.data.role === 'admin',
+        // Use is_account_owner from API (true for account owners who can access admin/billing)
+        isAdmin: (response.data as any).is_account_owner ?? response.data.role === 'admin',
         role: response.data.role,
         databases: response.data.databases || [],
         currentDb: response.data.databases?.[0]?.name || null,

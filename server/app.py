@@ -413,7 +413,13 @@ def logout():
 def me():
     user = User.query.get(session['user_id'])
     dbs = [{'id': d.id, 'name': d.name, 'display_name': d.display_name} for d in user.accessible_databases]
-    return jsonify({'username': user.username, 'role': user.role, 'databases': dbs, 'current_db': session.get('db_name')})
+    return jsonify({
+        'username': user.username,
+        'role': user.role,
+        'databases': dbs,
+        'current_db': session.get('db_name'),
+        'is_account_owner': user.is_account_owner if is_saas() else (user.role == 'admin')
+    })
 
 @api_bp.route('/select-db/<string:db_name>', methods=['POST'])
 @login_required
@@ -426,32 +432,56 @@ def select_database(db_name):
 @api_bp.route('/databases', methods=['GET', 'POST'])
 @admin_required
 def databases_handler():
+    current_user = User.query.get(session.get('user_id'))
     if request.method == 'GET':
-        dbs = Database.query.order_by(Database.created_at.desc()).all()
+        # In SaaS mode, only show databases owned by this admin
+        if is_saas():
+            dbs = Database.query.filter_by(owner_id=current_user.id).order_by(Database.created_at.desc()).all()
+        else:
+            dbs = Database.query.order_by(Database.created_at.desc()).all()
         return jsonify([{'id': d.id, 'name': d.name, 'display_name': d.display_name, 'description': d.description} for d in dbs])
     else:
         data = request.get_json(); name, display_name = data.get('name'), data.get('display_name')
         if not name or not display_name: return jsonify({'error': 'Missing fields'}), 400
         if Database.query.filter_by(name=name).first(): return jsonify({'error': 'Exists'}), 400
         new_db = Database(name=name, display_name=display_name, description=data.get('description', ''))
+        # In SaaS mode, set owner to current admin
+        if is_saas():
+            new_db.owner_id = current_user.id
         db.session.add(new_db)
-        for admin in User.query.filter_by(role='admin').all(): admin.accessible_databases.append(new_db)
+        # In SaaS mode, only grant access to this admin; in self-hosted, grant to all admins
+        if is_saas():
+            current_user.accessible_databases.append(new_db)
+        else:
+            for admin in User.query.filter_by(role='admin').all(): admin.accessible_databases.append(new_db)
         db.session.commit(); return jsonify({'message': 'Created', 'id': new_db.id}), 201
 
 @api_bp.route('/databases/<int:db_id>', methods=['DELETE'])
 @admin_required
 def delete_database(db_id):
     target_db = Database.query.get_or_404(db_id)
+    # In SaaS mode, only allow deleting databases you own
+    if is_saas():
+        current_user_id = session.get('user_id')
+        if target_db.owner_id != current_user_id:
+            return jsonify({'error': 'Access denied'}), 403
     db.session.delete(target_db); db.session.commit(); return jsonify({'message': 'Deleted'})
 
 @api_bp.route('/databases/<int:db_id>/access', methods=['GET', 'POST'])
 @admin_required
 def database_access_handler(db_id):
     target_db = Database.query.get_or_404(db_id)
+    current_user_id = session.get('user_id')
+    # In SaaS mode, only allow managing access to databases you own
+    if is_saas() and target_db.owner_id != current_user_id:
+        return jsonify({'error': 'Access denied'}), 403
     if request.method == 'GET':
         return jsonify([{'id': u.id, 'username': u.username, 'role': u.role} for u in target_db.users])
     else:
         user = User.query.get_or_404(request.get_json().get('user_id'))
+        # In SaaS mode, only allow granting access to users you created
+        if is_saas() and user.created_by_id != current_user_id and user.id != current_user_id:
+            return jsonify({'error': 'Cannot grant access to users outside your account'}), 403
         if target_db not in user.accessible_databases:
             user.accessible_databases.append(target_db); db.session.commit()
         return jsonify({'message': 'Granted'})
@@ -460,6 +490,10 @@ def database_access_handler(db_id):
 @admin_required
 def revoke_database_access(db_id, user_id):
     target_db = Database.query.get_or_404(db_id); user = User.query.get_or_404(user_id)
+    current_user_id = session.get('user_id')
+    # In SaaS mode, only allow revoking access to databases you own
+    if is_saas() and target_db.owner_id != current_user_id:
+        return jsonify({'error': 'Access denied'}), 403
     if target_db in user.accessible_databases:
         user.accessible_databases.remove(target_db); db.session.commit()
     return jsonify({'message': 'Revoked'})
@@ -467,28 +501,54 @@ def revoke_database_access(db_id, user_id):
 @api_bp.route('/users', methods=['GET', 'POST'])
 @admin_required
 def users_handler():
+    current_user_id = session.get('user_id')
+    current_user = User.query.get(current_user_id)
     if request.method == 'GET':
-        users = User.query.all(); return jsonify([{'id': u.id, 'username': u.username, 'role': u.role} for u in users])
+        # In SaaS mode, only show users created by this admin (plus themselves)
+        if is_saas():
+            users = User.query.filter(
+                (User.created_by_id == current_user_id) | (User.id == current_user_id)
+            ).all()
+        else:
+            users = User.query.all()
+        return jsonify([{'id': u.id, 'username': u.username, 'role': u.role} for u in users])
     else:
         data = request.get_json(); username, password = data.get('username'), data.get('password')
         if User.query.filter_by(username=username).first(): return jsonify({'error': 'Taken'}), 400
         new_user = User(username=username, role=data.get('role', 'user'), password_change_required=True)
+        # In SaaS mode, track who created this user
+        if is_saas():
+            new_user.created_by_id = current_user_id
         new_user.set_password(data.get('password')); db.session.add(new_user)
         for db_id in data.get('database_ids', []):
-            d = Database.query.get(db_id); 
-            if d: new_user.accessible_databases.append(d)
+            d = Database.query.get(db_id)
+            # In SaaS mode, only allow assigning access to databases you own
+            if d:
+                if is_saas() and d.owner_id != current_user_id:
+                    continue  # Skip databases not owned by this admin
+                new_user.accessible_databases.append(d)
         db.session.commit(); return jsonify({'message': 'Created', 'id': new_user.id}), 201
 
 @api_bp.route('/users/<int:user_id>', methods=['DELETE'])
 @admin_required
 def delete_user(user_id):
     if user_id == session.get('user_id'): return jsonify({'error': 'Self'}), 400
-    user = User.query.get_or_404(user_id); db.session.delete(user); db.session.commit(); return jsonify({'message': 'Deleted'})
+    user = User.query.get_or_404(user_id)
+    # In SaaS mode, only allow deleting users you created
+    if is_saas():
+        current_user_id = session.get('user_id')
+        if user.created_by_id != current_user_id:
+            return jsonify({'error': 'Access denied'}), 403
+    db.session.delete(user); db.session.commit(); return jsonify({'message': 'Deleted'})
 
 @api_bp.route('/users/<int:user_id>/databases', methods=['GET'])
 @admin_required
 def get_user_databases(user_id):
     user = User.query.get_or_404(user_id)
+    current_user_id = session.get('user_id')
+    # In SaaS mode, only allow viewing databases of users you created (or yourself)
+    if is_saas() and user.created_by_id != current_user_id and user.id != current_user_id:
+        return jsonify({'error': 'Access denied'}), 403
     return jsonify([{'id': d.id, 'name': d.name, 'display_name': d.display_name} for d in user.accessible_databases])
 
 @api_bp.route('/api/accounts', methods=['GET'])
@@ -676,7 +736,7 @@ def process_auto_payments():
 
 @api_bp.route('/api/version', methods=['GET'])
 def get_version():
-    return jsonify({'version': '3.2.5', 'license': "O'Saasy", 'license_url': 'https://osaasy.dev/', 'features': ['enhanced_frequencies', 'auto_payments', 'postgresql_saas', 'row_tenancy']})
+    return jsonify({'version': '3.2.6', 'license': "O'Saasy", 'license_url': 'https://osaasy.dev/', 'features': ['enhanced_frequencies', 'auto_payments', 'postgresql_saas', 'row_tenancy']})
 
 @api_bp.route('/ping')
 def ping(): return jsonify({'status': 'ok'})
@@ -845,8 +905,9 @@ def register():
     if User.query.filter_by(email=email).first():
         return jsonify({'success': False, 'error': 'Email already registered'}), 409
 
-    # Create user
-    user = User(username=username, email=email, role='user')
+    # Create user - in SaaS mode, each registered user is an admin of their own account
+    user_role = 'admin' if is_saas() else 'user'
+    user = User(username=username, email=email, role=user_role)
     user.set_password(password)
 
     # For self-hosted mode without email verification, mark as verified
@@ -871,6 +932,10 @@ def register():
     )
     db.session.add(default_db)
     db.session.flush()  # Get the IDs
+
+    # In SaaS mode, set the owner_id to track which admin owns this database
+    if is_saas():
+        default_db.owner_id = user.id
 
     # Grant user access to their default database
     user.accessible_databases.append(default_db)
@@ -1400,7 +1465,8 @@ def jwt_me():
             'username': user.username,
             'role': user.role,
             'databases': databases,
-            'current_db': g.jwt_db_name
+            'current_db': g.jwt_db_name,
+            'is_account_owner': user.is_account_owner if is_saas() else (user.role == 'admin')
         }
     })
 
@@ -1809,7 +1875,7 @@ def jwt_get_version():
     return jsonify({
         'success': True,
         'data': {
-            'version': '3.2.5',
+            'version': '3.2.6',
             'api_version': 'v2',
             'license': "O'Saasy",
             'license_url': 'https://osaasy.dev/',

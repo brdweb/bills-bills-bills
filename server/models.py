@@ -22,6 +22,9 @@ class User(db.Model):
     change_token = db.Column(db.String(64), nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
+    # SaaS multi-tenancy: track which admin created this user (null for self-registered admins)
+    created_by_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
+
     # Email and verification (for SaaS registration)
     email = db.Column(db.String(255), unique=True, nullable=True)
     email_verified_at = db.Column(db.DateTime, nullable=True)
@@ -37,6 +40,21 @@ class User(db.Model):
 
     # Relationships
     accessible_databases = db.relationship('Database', secondary=user_database_access, backref='users')
+    created_by = db.relationship('User', remote_side='User.id', foreign_keys=[created_by_id], backref='created_users')
+
+    @property
+    def is_account_owner(self):
+        """Check if this user is an account owner (self-registered admin, not a sub-user)"""
+        return self.role == 'admin' and self.created_by_id is None
+
+    @property
+    def account_owner(self):
+        """Get the account owner for this user (self if admin, or the admin who created them)"""
+        if self.is_account_owner:
+            return self
+        if self.created_by_id:
+            return User.query.get(self.created_by_id)
+        return None
 
     def set_password(self, password):
         """Hash password using werkzeug's secure method (pbkdf2:sha256)."""
@@ -116,8 +134,12 @@ class Database(db.Model):
     description = db.Column(db.String(255))
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
+    # Owner tracking for SaaS multi-tenancy (which admin owns this database)
+    owner_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
+
     # Relationships
     bills = db.relationship('Bill', backref='database', lazy=True, cascade="all, delete-orphan")
+    owner = db.relationship('User', foreign_keys=[owner_id], backref='owned_databases')
 
 class Bill(db.Model):
     __tablename__ = 'bills'

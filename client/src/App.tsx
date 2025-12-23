@@ -283,6 +283,7 @@ function App() {
     <>
       <Layout
         onAdminClick={openAdmin}
+        onBillingClick={() => navigate('/billing')}
         sidebar={
           <Stack gap="xs">
             <Sidebar
@@ -308,7 +309,7 @@ function App() {
                 />
                 <Divider />
                 <Text size="xs" c="dimmed" ta="center">
-                  BillManager v3.2.5 - Licensed under{' '}
+                  BillManager v3.2.6 - Licensed under{' '}
                   <Anchor href="https://osaasy.dev/" target="_blank" size="xs">
                     O'Saasy
                   </Anchor>

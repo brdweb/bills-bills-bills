@@ -106,12 +106,36 @@ def migrate_20241222_01_add_subscription_tier(db):
     db.session.commit()
 
 
+def migrate_20241223_01_add_saas_tenancy_columns(db):
+    """Add owner_id to databases and created_by_id to users for SaaS multi-tenancy."""
+    inspector = inspect(db.engine)
+
+    # Add created_by_id to users table
+    user_columns = [col['name'] for col in inspector.get_columns('users')]
+    if 'created_by_id' not in user_columns:
+        db.session.execute(text('''
+            ALTER TABLE users ADD COLUMN created_by_id INTEGER REFERENCES users(id)
+        '''))
+        logger.info("Added users.created_by_id column")
+
+    # Add owner_id to databases table
+    db_columns = [col['name'] for col in inspector.get_columns('databases')]
+    if 'owner_id' not in db_columns:
+        db.session.execute(text('''
+            ALTER TABLE databases ADD COLUMN owner_id INTEGER REFERENCES users(id)
+        '''))
+        logger.info("Added databases.owner_id column")
+
+    db.session.commit()
+
+
 # List of all migrations in order
 # Format: (version, description, function)
 MIGRATIONS = [
     ('20241221_01', 'Increase password_hash column to 256 chars', migrate_20241221_01_password_hash_length),
     ('20241221_02', 'Add migrations tracking index', migrate_20241221_02_add_migrations_index),
     ('20241222_01', 'Add subscription tier and billing_interval columns', migrate_20241222_01_add_subscription_tier),
+    ('20241223_01', 'Add SaaS multi-tenancy columns (owner_id, created_by_id)', migrate_20241223_01_add_saas_tenancy_columns),
 ]
 
 
