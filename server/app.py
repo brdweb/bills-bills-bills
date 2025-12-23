@@ -576,10 +576,11 @@ def users_handler():
 def delete_user(user_id):
     if user_id == session.get('user_id'): return jsonify({'error': 'Self'}), 400
     user = User.query.get_or_404(user_id)
-    # In SaaS mode, only allow deleting users you created
+    # In SaaS mode, only allow deleting users you created (or legacy users with NULL created_by_id)
     if is_saas():
         current_user_id = session.get('user_id')
-        if user.created_by_id != current_user_id:
+        # Allow deletion if: user was created by current admin, OR user is a legacy user (NULL created_by_id)
+        if user.created_by_id is not None and user.created_by_id != current_user_id:
             return jsonify({'error': 'Access denied'}), 403
     db.session.delete(user); db.session.commit(); return jsonify({'message': 'Deleted'})
 
@@ -588,9 +589,10 @@ def delete_user(user_id):
 def get_user_databases(user_id):
     user = User.query.get_or_404(user_id)
     current_user_id = session.get('user_id')
-    # In SaaS mode, only allow viewing databases of users you created (or yourself)
-    if is_saas() and user.created_by_id != current_user_id and user.id != current_user_id:
-        return jsonify({'error': 'Access denied'}), 403
+    # In SaaS mode, only allow viewing databases of users you created (or yourself, or legacy users)
+    if is_saas() and user.id != current_user_id:
+        if user.created_by_id is not None and user.created_by_id != current_user_id:
+            return jsonify({'error': 'Access denied'}), 403
     return jsonify([{'id': d.id, 'name': d.name, 'display_name': d.display_name} for d in user.accessible_databases])
 
 @api_bp.route('/api/accounts', methods=['GET'])
