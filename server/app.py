@@ -23,7 +23,7 @@ from db_migrations import run_pending_migrations
 from services.email import send_verification_email, send_password_reset_email, send_welcome_email
 from services.stripe_service import (
     create_checkout_session, create_portal_session, construct_webhook_event,
-    get_subscription, cancel_subscription, STRIPE_PUBLISHABLE_KEY
+    get_subscription, cancel_subscription, update_subscription, STRIPE_PUBLISHABLE_KEY
 )
 from config import (
     DEPLOYMENT_MODE, ENABLE_REGISTRATION, REQUIRE_EMAIL_VERIFICATION,
@@ -1166,6 +1166,65 @@ def billing_portal():
     return jsonify({
         'success': True,
         'url': result['url']
+    })
+
+
+@api_v2_bp.route('/billing/change-plan', methods=['POST'])
+@jwt_required
+def change_plan():
+    """Change subscription plan (upgrade or downgrade)."""
+    from config import get_stripe_price_id
+
+    user = User.query.get(g.jwt_user_id)
+    if not user:
+        return jsonify({'success': False, 'error': 'User not found'}), 404
+
+    if not user.subscription or not user.subscription.stripe_subscription_id:
+        return jsonify({'success': False, 'error': 'No active subscription to change'}), 400
+
+    # Only allow changes for active paid subscriptions
+    if user.subscription.status not in ('active', 'past_due'):
+        return jsonify({'success': False, 'error': 'Subscription must be active to change plans'}), 400
+
+    data = request.get_json() or {}
+    new_tier = data.get('tier')
+    new_interval = data.get('interval')
+
+    if not new_tier or new_tier not in ('basic', 'plus'):
+        return jsonify({'success': False, 'error': 'Invalid tier. Must be basic or plus'}), 400
+    if not new_interval or new_interval not in ('monthly', 'annual'):
+        return jsonify({'success': False, 'error': 'Invalid interval. Must be monthly or annual'}), 400
+
+    # Get new price ID
+    new_price_id = get_stripe_price_id(new_tier, new_interval)
+    if not new_price_id:
+        return jsonify({'success': False, 'error': 'Price not configured for selected plan'}), 400
+
+    # Determine if upgrade or downgrade based on tier/price
+    current_tier = user.subscription.tier or 'basic'
+    tier_order = {'basic': 1, 'plus': 2}
+    is_upgrade = tier_order.get(new_tier, 1) > tier_order.get(current_tier, 1)
+
+    # Upgrades: immediate with proration. Downgrades: at end of billing period
+    result = update_subscription(
+        user.subscription.stripe_subscription_id,
+        new_price_id,
+        prorate=is_upgrade
+    )
+
+    if 'error' in result:
+        return jsonify({'success': False, 'error': result['error']}), 400
+
+    # Update local subscription record
+    user.subscription.tier = new_tier
+    user.subscription.billing_interval = new_interval
+    db.session.commit()
+
+    return jsonify({
+        'success': True,
+        'message': f"Plan {'upgraded' if is_upgrade else 'downgraded'} to {new_tier.capitalize()}",
+        'effective': 'immediately' if is_upgrade else 'at end of billing period',
+        'data': result
     })
 
 

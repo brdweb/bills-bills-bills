@@ -185,6 +185,62 @@ def get_subscription(subscription_id: str) -> dict:
         return {'error': str(e)}
 
 
+def update_subscription(subscription_id: str, new_price_id: str, prorate: bool = True) -> dict:
+    """
+    Update a subscription to a new price (upgrade/downgrade).
+
+    Args:
+        subscription_id: Stripe subscription ID
+        new_price_id: New Stripe price ID to switch to
+        prorate: If True, prorate charges (for upgrades). If False, change at period end (for downgrades).
+
+    Returns dict with subscription details or 'error'.
+    """
+    if not STRIPE_AVAILABLE or not STRIPE_SECRET_KEY:
+        return {'error': 'Stripe not configured'}
+
+    stripe.api_key = STRIPE_SECRET_KEY
+
+    try:
+        # Get current subscription to find the item ID
+        subscription = stripe.Subscription.retrieve(subscription_id)
+        if not subscription.get('items', {}).get('data'):
+            return {'error': 'No subscription items found'}
+
+        item_id = subscription['items']['data'][0]['id']
+
+        if prorate:
+            # Immediate change with proration (for upgrades)
+            updated = stripe.Subscription.modify(
+                subscription_id,
+                items=[{
+                    'id': item_id,
+                    'price': new_price_id,
+                }],
+                proration_behavior='create_prorations'
+            )
+        else:
+            # Schedule change at period end (for downgrades)
+            updated = stripe.Subscription.modify(
+                subscription_id,
+                items=[{
+                    'id': item_id,
+                    'price': new_price_id,
+                }],
+                proration_behavior='none',
+                billing_cycle_anchor='unchanged'
+            )
+
+        return {
+            'id': updated.id,
+            'status': updated.status,
+            'current_period_end': updated.current_period_end,
+        }
+    except stripe.error.StripeError as e:
+        logger.error(f"Stripe update subscription error: {e}")
+        return {'error': str(e)}
+
+
 def cancel_subscription(subscription_id: str, at_period_end: bool = True) -> dict:
     """Cancel a subscription (optionally at period end)."""
     if not STRIPE_AVAILABLE or not STRIPE_SECRET_KEY:
