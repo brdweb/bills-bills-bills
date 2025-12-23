@@ -18,6 +18,7 @@ import { VerifyEmail } from './pages/VerifyEmail';
 import { ForgotPassword } from './pages/ForgotPassword';
 import { ResetPassword } from './pages/ResetPassword';
 import { ResendVerification } from './pages/ResendVerification';
+import { AcceptInvite } from './pages/AcceptInvite';
 import { Billing } from './pages/Billing';
 import { useAuth } from './context/AuthContext';
 import { useConfig } from './context/ConfigContext';
@@ -252,7 +253,7 @@ function App() {
   }
 
   // Public routes - no authentication required
-  const publicRoutes = ['/login', '/register', '/verify-email', '/forgot-password', '/reset-password', '/resend-verification'];
+  const publicRoutes = ['/login', '/register', '/verify-email', '/forgot-password', '/reset-password', '/resend-verification', '/accept-invite'];
   const isPublicRoute = publicRoutes.includes(location.pathname);
 
   // If not logged in and not on a public route, render just the routes (no Layout)
@@ -275,6 +276,7 @@ function App() {
         <Route path="/forgot-password" element={<ForgotPassword />} />
         <Route path="/reset-password" element={<ResetPassword />} />
         <Route path="/resend-verification" element={<ResendVerification />} />
+        <Route path="/accept-invite" element={<AcceptInvite />} />
       </Routes>
     );
   }
@@ -309,7 +311,7 @@ function App() {
                 />
                 <Divider />
                 <Text size="xs" c="dimmed" ta="center">
-                  BillManager v3.2.13 - Licensed under{' '}
+                  BillManager v3.2.14 - Licensed under{' '}
                   <Anchor href="https://osaasy.dev/" target="_blank" size="xs">
                     O'Saasy
                   </Anchor>

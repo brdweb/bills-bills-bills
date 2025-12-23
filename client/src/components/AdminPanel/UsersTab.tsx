@@ -6,7 +6,6 @@ import {
   ActionIcon,
   Group,
   TextInput,
-  PasswordInput,
   Select,
   Modal,
   Checkbox,
@@ -15,32 +14,35 @@ import {
   Paper,
   Loader,
   Center,
+  Divider,
 } from '@mantine/core';
-import { IconTrash, IconEdit, IconPlus } from '@tabler/icons-react';
-import type { User, Database } from '../../api/client';
+import { IconTrash, IconEdit, IconMail, IconX } from '@tabler/icons-react';
+import type { User, Database, UserInvite } from '../../api/client';
 import {
   getUsers,
-  addUser,
   deleteUser,
   updateUser,
   getDatabases,
   getUserDatabases,
   grantDatabaseAccess,
   revokeDatabaseAccess,
+  inviteUser,
+  getInvites,
+  cancelInvite,
 } from '../../api/client';
 
 export function UsersTab() {
   const [users, setUsers] = useState<User[]>([]);
   const [databases, setDatabases] = useState<Database[]>([]);
+  const [invites, setInvites] = useState<UserInvite[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // Add user form
-  const [showAddForm, setShowAddForm] = useState(false);
-  const [newUsername, setNewUsername] = useState('');
-  const [newPassword, setNewPassword] = useState('');
-  const [newRole, setNewRole] = useState<string>('user');
+  // Invite user form
+  const [showInviteForm, setShowInviteForm] = useState(false);
+  const [inviteEmail, setInviteEmail] = useState('');
+  const [inviteRole, setInviteRole] = useState<string>('user');
   const [selectedDatabases, setSelectedDatabases] = useState<number[]>([]);
-  const [addLoading, setAddLoading] = useState(false);
+  const [inviteLoading, setInviteLoading] = useState(false);
 
   // Edit user modal
   const [editingUser, setEditingUser] = useState<User | null>(null);
@@ -55,9 +57,14 @@ export function UsersTab() {
   const fetchData = async () => {
     setLoading(true);
     try {
-      const [usersRes, dbsRes] = await Promise.all([getUsers(), getDatabases()]);
+      const [usersRes, dbsRes, invitesRes] = await Promise.all([
+        getUsers(),
+        getDatabases(),
+        getInvites(),
+      ]);
       setUsers(usersRes.data);
       setDatabases(dbsRes.data);
+      setInvites(invitesRes.data);
     } catch (error) {
       console.error('Failed to fetch data:', error);
     } finally {
@@ -65,23 +72,32 @@ export function UsersTab() {
     }
   };
 
-  const handleAddUser = async () => {
-    if (!newUsername || !newPassword) return;
+  const handleInviteUser = async () => {
+    if (!inviteEmail) return;
 
-    setAddLoading(true);
+    setInviteLoading(true);
     try {
-      await addUser(newUsername, newPassword, newRole, selectedDatabases);
+      await inviteUser(inviteEmail, inviteRole, selectedDatabases);
       await fetchData();
-      setShowAddForm(false);
-      setNewUsername('');
-      setNewPassword('');
-      setNewRole('user');
+      setShowInviteForm(false);
+      setInviteEmail('');
+      setInviteRole('user');
       setSelectedDatabases([]);
-    } catch (error) {
-      console.error('Failed to add user:', error);
-      alert('Failed to add user');
+    } catch (error: any) {
+      alert(error.response?.data?.error || 'Failed to send invitation');
     } finally {
-      setAddLoading(false);
+      setInviteLoading(false);
+    }
+  };
+
+  const handleCancelInvite = async (inviteId: number) => {
+    if (!confirm('Are you sure you want to cancel this invitation?')) return;
+
+    try {
+      await cancelInvite(inviteId);
+      await fetchData();
+    } catch (error: any) {
+      alert(error.response?.data?.error || 'Failed to cancel invitation');
     }
   };
 
@@ -135,7 +151,7 @@ export function UsersTab() {
         ...toRemove.map((dbId) => revokeDatabaseAccess(dbId, editingUser.id)),
       ]);
 
-      await fetchData(); // Refresh the user list
+      await fetchData();
       setEditingUser(null);
     } catch (error: any) {
       alert(error.response?.data?.error || 'Failed to update user');
@@ -154,6 +170,8 @@ export function UsersTab() {
 
   return (
     <Stack gap="md">
+      {/* Users Table */}
+      <Text fw={600} size="sm">Users</Text>
       <Table striped highlightOnHover>
         <Table.Thead>
           <Table.Tr>
@@ -202,35 +220,81 @@ export function UsersTab() {
         </Table.Tbody>
       </Table>
 
-      {!showAddForm ? (
+      {/* Pending Invitations */}
+      {invites.length > 0 && (
+        <>
+          <Divider my="sm" />
+          <Text fw={600} size="sm">Pending Invitations</Text>
+          <Table striped highlightOnHover>
+            <Table.Thead>
+              <Table.Tr>
+                <Table.Th>Email</Table.Th>
+                <Table.Th>Role</Table.Th>
+                <Table.Th>Expires</Table.Th>
+                <Table.Th>Actions</Table.Th>
+              </Table.Tr>
+            </Table.Thead>
+            <Table.Tbody>
+              {invites.map((invite) => (
+                <Table.Tr key={invite.id}>
+                  <Table.Td>{invite.email}</Table.Td>
+                  <Table.Td>
+                    <Badge color={invite.role === 'admin' ? 'orange' : 'blue'}>
+                      {invite.role}
+                    </Badge>
+                  </Table.Td>
+                  <Table.Td>
+                    <Text size="sm" c="dimmed">
+                      {new Date(invite.expires_at).toLocaleDateString()}
+                    </Text>
+                  </Table.Td>
+                  <Table.Td>
+                    <ActionIcon
+                      variant="subtle"
+                      color="red"
+                      onClick={() => handleCancelInvite(invite.id)}
+                      title="Cancel Invitation"
+                    >
+                      <IconX size={18} />
+                    </ActionIcon>
+                  </Table.Td>
+                </Table.Tr>
+              ))}
+            </Table.Tbody>
+          </Table>
+        </>
+      )}
+
+      <Divider my="sm" />
+
+      {/* Invite User Form */}
+      {!showInviteForm ? (
         <Button
-          leftSection={<IconPlus size={16} />}
+          leftSection={<IconMail size={16} />}
           variant="light"
-          onClick={() => setShowAddForm(true)}
+          onClick={() => setShowInviteForm(true)}
         >
-          Add User
+          Invite User
         </Button>
       ) : (
         <Paper p="md" withBorder>
           <Stack gap="sm">
-            <Text fw={500}>Add New User</Text>
+            <Text fw={500}>Invite New User</Text>
+            <Text size="sm" c="dimmed">
+              Send an invitation email. The user will set their own username and password.
+            </Text>
             <Group grow>
               <TextInput
-                label="Username"
-                value={newUsername}
-                onChange={(e) => setNewUsername(e.currentTarget.value)}
-                placeholder="Enter username"
-              />
-              <PasswordInput
-                label="Password"
-                value={newPassword}
-                onChange={(e) => setNewPassword(e.currentTarget.value)}
-                placeholder="Enter password"
+                label="Email Address"
+                type="email"
+                value={inviteEmail}
+                onChange={(e) => setInviteEmail(e.currentTarget.value)}
+                placeholder="user@example.com"
               />
               <Select
                 label="Role"
-                value={newRole}
-                onChange={(val) => setNewRole(val || 'user')}
+                value={inviteRole}
+                onChange={(val) => setInviteRole(val || 'user')}
                 data={[
                   { value: 'user', label: 'User' },
                   { value: 'admin', label: 'Admin' },
@@ -259,10 +323,14 @@ export function UsersTab() {
             </Group>
 
             <Group>
-              <Button onClick={handleAddUser} loading={addLoading}>
-                Create User
+              <Button
+                onClick={handleInviteUser}
+                loading={inviteLoading}
+                leftSection={<IconMail size={16} />}
+              >
+                Send Invitation
               </Button>
-              <Button variant="default" onClick={() => setShowAddForm(false)}>
+              <Button variant="default" onClick={() => setShowInviteForm(false)}>
                 Cancel
               </Button>
             </Group>

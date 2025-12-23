@@ -142,6 +142,29 @@ def send_password_reset_email(email: str, token: str, username: str) -> bool:
     return send_email(email, "Reset your BillManager password", html)
 
 
+def send_invite_email(email: str, token: str, invited_by: str) -> bool:
+    """Send invitation email to new user"""
+    invite_url = f"{APP_URL}/accept-invite?token={token}"
+
+    content = f"""
+        <p>Hi there!</p>
+        <p><strong>{invited_by}</strong> has invited you to join their BillManager account.</p>
+        <p>BillManager helps you track recurring bills, income, and never miss a payment.</p>
+        <p style="text-align: center;">
+            <a href="{invite_url}" class="button">Accept Invitation</a>
+        </p>
+        <p>Or copy and paste this link into your browser:</p>
+        <p class="link">{invite_url}</p>
+        <div class="warning">
+            <strong>⏰ This invitation will expire in 7 days.</strong>
+        </div>
+        <p style="color: #64748b;">If you weren't expecting this invitation, you can safely ignore this email.</p>
+    """
+
+    html = get_email_template(content, "You're Invited!")
+    return send_email(email, f"{invited_by} invited you to BillManager", html)
+
+
 def send_welcome_email(email: str, username: str) -> bool:
     """Send welcome email after email verification"""
     login_url = f"{APP_URL}/login"

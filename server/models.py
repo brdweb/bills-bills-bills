@@ -194,6 +194,35 @@ class RefreshToken(db.Model):
     user = db.relationship('User', backref=db.backref('refresh_tokens', lazy=True))
 
 
+class UserInvite(db.Model):
+    """Stores pending user invitations"""
+    __tablename__ = 'user_invites'
+    id = db.Column(db.Integer, primary_key=True)
+    email = db.Column(db.String(255), nullable=False)
+    token = db.Column(db.String(64), unique=True, nullable=False)
+    role = db.Column(db.String(20), default='user')
+    invited_by_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    database_ids = db.Column(db.String(255), default='')  # Comma-separated list of database IDs
+    expires_at = db.Column(db.DateTime, nullable=False)
+    accepted_at = db.Column(db.DateTime, nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    # Relationship
+    invited_by = db.relationship('User', backref=db.backref('sent_invites', lazy=True))
+
+    @property
+    def is_expired(self):
+        return datetime.utcnow() > self.expires_at
+
+    @property
+    def is_accepted(self):
+        return self.accepted_at is not None
+
+    @property
+    def is_valid(self):
+        return not self.is_expired and not self.is_accepted
+
+
 class Subscription(db.Model):
     """Stores Stripe subscription information for billing"""
     __tablename__ = 'subscriptions'

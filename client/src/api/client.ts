@@ -151,6 +151,28 @@ export const updateUser = (userId: number, data: { email?: string | null }) =>
 export const getUserDatabases = (userId: number) =>
   api.get<Database[]>(`/users/${userId}/databases`);
 
+// User Invitations API
+export interface UserInvite {
+  id: number;
+  email: string;
+  role: string;
+  created_at: string;
+  expires_at: string;
+}
+
+export const inviteUser = (email: string, role: string, database_ids: number[]) =>
+  api.post<{ message: string; id: number }>('/users/invite', { email, role, database_ids });
+
+export const getInvites = () => api.get<UserInvite[]>('/users/invites');
+
+export const cancelInvite = (inviteId: number) => api.delete(`/users/invites/${inviteId}`);
+
+export const getInviteInfo = (token: string) =>
+  api.get<{ email: string; invited_by: string; expires_at: string }>(`/invite-info?token=${token}`);
+
+export const acceptInvite = (token: string, username: string, password: string) =>
+  api.post<{ message: string; username: string }>('/accept-invite', { token, username, password });
+
 // Bills API
 export const getBills = (includeArchived = false, type?: 'expense' | 'deposit') => {
   let url = `/bills${includeArchived ? '?include_archived=true' : ''}`;

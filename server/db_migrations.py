@@ -167,6 +167,30 @@ def migrate_20241223_02_backfill_tenancy_ownership(db):
     db.session.commit()
 
 
+def migrate_20241223_03_create_user_invites_table(db):
+    """Create the user_invites table for invite-based user registration."""
+    inspector = inspect(db.engine)
+    if 'user_invites' in inspector.get_table_names():
+        logger.info("user_invites table already exists")
+        return
+
+    db.session.execute(text('''
+        CREATE TABLE user_invites (
+            id SERIAL PRIMARY KEY,
+            email VARCHAR(255) NOT NULL,
+            token VARCHAR(64) UNIQUE NOT NULL,
+            role VARCHAR(20) DEFAULT 'user',
+            invited_by_id INTEGER NOT NULL REFERENCES users(id),
+            database_ids VARCHAR(255) DEFAULT '',
+            expires_at TIMESTAMP NOT NULL,
+            accepted_at TIMESTAMP,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    '''))
+    db.session.commit()
+    logger.info("Created user_invites table")
+
+
 # List of all migrations in order
 # Format: (version, description, function)
 MIGRATIONS = [
@@ -175,6 +199,7 @@ MIGRATIONS = [
     ('20241222_01', 'Add subscription tier and billing_interval columns', migrate_20241222_01_add_subscription_tier),
     ('20241223_01', 'Add SaaS multi-tenancy columns (owner_id, created_by_id)', migrate_20241223_01_add_saas_tenancy_columns),
     ('20241223_02', 'Backfill owner_id and created_by_id for existing data', migrate_20241223_02_backfill_tenancy_ownership),
+    ('20241223_03', 'Create user_invites table for invite-based registration', migrate_20241223_03_create_user_invites_table),
 ]
 
 

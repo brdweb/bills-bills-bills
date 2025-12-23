@@ -17,10 +17,10 @@ from flask_limiter.util import get_remote_address
 from flask_talisman import Talisman
 from sqlalchemy import func, extract, desc
 
-from models import db, User, Database, Bill, Payment, RefreshToken, Subscription
+from models import db, User, Database, Bill, Payment, RefreshToken, Subscription, UserInvite
 from migration import migrate_sqlite_to_pg
 from db_migrations import run_pending_migrations
-from services.email import send_verification_email, send_password_reset_email, send_welcome_email
+from services.email import send_verification_email, send_password_reset_email, send_welcome_email, send_invite_email
 from services.stripe_service import (
     create_checkout_session, create_portal_session, construct_webhook_event,
     get_subscription, cancel_subscription, update_subscription, STRIPE_PUBLISHABLE_KEY
@@ -606,6 +606,172 @@ def delete_user(user_id):
             return jsonify({'error': 'Access denied'}), 403
     db.session.delete(user); db.session.commit(); return jsonify({'message': 'Deleted'})
 
+@api_bp.route('/users/invite', methods=['POST'])
+@admin_required
+def invite_user():
+    """Send an invitation email to a new user"""
+    data = request.get_json()
+    email = data.get('email', '').strip().lower()
+    role = data.get('role', 'user')
+    database_ids = data.get('database_ids', [])
+
+    if not email:
+        return jsonify({'error': 'Email is required'}), 400
+
+    # Validate email format
+    import re
+    if not re.match(r'^[^\s@]+@[^\s@]+\.[^\s@]+$', email):
+        return jsonify({'error': 'Invalid email format'}), 400
+
+    # Check if user with this email already exists
+    existing_user = User.query.filter_by(email=email).first()
+    if existing_user:
+        return jsonify({'error': 'A user with this email already exists'}), 400
+
+    # Check for pending invite to same email
+    pending_invite = UserInvite.query.filter_by(email=email, accepted_at=None).filter(
+        UserInvite.expires_at > datetime.utcnow()
+    ).first()
+    if pending_invite:
+        return jsonify({'error': 'An invitation has already been sent to this email'}), 400
+
+    current_user_id = session.get('user_id')
+    current_user = User.query.get(current_user_id)
+
+    # In SaaS mode, validate database access
+    if is_saas():
+        for db_id in database_ids:
+            d = Database.query.get(db_id)
+            if d and d.owner_id != current_user_id:
+                return jsonify({'error': 'Cannot grant access to databases you do not own'}), 403
+
+    # Create invitation
+    import secrets
+    token = secrets.token_urlsafe(32)
+    invite = UserInvite(
+        email=email,
+        token=token,
+        role=role,
+        invited_by_id=current_user_id,
+        expires_at=datetime.utcnow() + timedelta(days=7)
+    )
+    # Store database IDs in a simple format (we'll use them when accepting)
+    invite.database_ids = ','.join(str(id) for id in database_ids) if database_ids else ''
+
+    db.session.add(invite)
+    db.session.commit()
+
+    # Send invitation email
+    invited_by_name = current_user.username
+    if send_invite_email(email, token, invited_by_name):
+        return jsonify({'message': 'Invitation sent', 'id': invite.id}), 201
+    else:
+        return jsonify({'message': 'Invitation created but email failed to send', 'id': invite.id}), 201
+
+@api_bp.route('/users/invites', methods=['GET'])
+@admin_required
+def get_invites():
+    """Get pending invitations sent by current admin"""
+    current_user_id = session.get('user_id')
+    invites = UserInvite.query.filter_by(invited_by_id=current_user_id, accepted_at=None).filter(
+        UserInvite.expires_at > datetime.utcnow()
+    ).all()
+    return jsonify([{
+        'id': inv.id,
+        'email': inv.email,
+        'role': inv.role,
+        'created_at': inv.created_at.isoformat(),
+        'expires_at': inv.expires_at.isoformat()
+    } for inv in invites])
+
+@api_bp.route('/users/invites/<int:invite_id>', methods=['DELETE'])
+@admin_required
+def cancel_invite(invite_id):
+    """Cancel a pending invitation"""
+    current_user_id = session.get('user_id')
+    invite = UserInvite.query.get_or_404(invite_id)
+    if invite.invited_by_id != current_user_id:
+        return jsonify({'error': 'Access denied'}), 403
+    if invite.is_accepted:
+        return jsonify({'error': 'Invitation already accepted'}), 400
+    db.session.delete(invite)
+    db.session.commit()
+    return jsonify({'message': 'Invitation cancelled'})
+
+@api_bp.route('/accept-invite', methods=['POST'])
+def accept_invite():
+    """Accept an invitation and create user account (public endpoint)"""
+    data = request.get_json()
+    token = data.get('token', '').strip()
+    username = data.get('username', '').strip()
+    password = data.get('password', '')
+
+    if not token or not username or not password:
+        return jsonify({'error': 'Token, username, and password are required'}), 400
+
+    # Find the invitation
+    invite = UserInvite.query.filter_by(token=token).first()
+    if not invite:
+        return jsonify({'error': 'Invalid invitation token'}), 400
+    if invite.is_accepted:
+        return jsonify({'error': 'Invitation has already been accepted'}), 400
+    if invite.is_expired:
+        return jsonify({'error': 'Invitation has expired'}), 400
+
+    # Check username availability
+    if User.query.filter_by(username=username).first():
+        return jsonify({'error': 'Username is already taken'}), 400
+
+    # Create the user
+    new_user = User(
+        username=username,
+        email=invite.email,
+        role=invite.role,
+        created_by_id=invite.invited_by_id,
+        email_verified_at=datetime.utcnow()  # Auto-verify since they received the invite email
+    )
+    new_user.set_password(password)
+    db.session.add(new_user)
+
+    # Grant access to specified databases
+    if hasattr(invite, 'database_ids') and invite.database_ids:
+        for db_id_str in invite.database_ids.split(','):
+            try:
+                db_id = int(db_id_str)
+                d = Database.query.get(db_id)
+                if d:
+                    new_user.accessible_databases.append(d)
+            except ValueError:
+                pass
+
+    # Mark invitation as accepted
+    invite.accepted_at = datetime.utcnow()
+    db.session.commit()
+
+    return jsonify({'message': 'Account created successfully', 'username': username}), 201
+
+@api_bp.route('/invite-info', methods=['GET'])
+def get_invite_info():
+    """Get information about an invitation (public endpoint)"""
+    token = request.args.get('token', '').strip()
+    if not token:
+        return jsonify({'error': 'Token is required'}), 400
+
+    invite = UserInvite.query.filter_by(token=token).first()
+    if not invite:
+        return jsonify({'error': 'Invalid invitation token'}), 404
+    if invite.is_accepted:
+        return jsonify({'error': 'Invitation has already been accepted'}), 400
+    if invite.is_expired:
+        return jsonify({'error': 'Invitation has expired'}), 400
+
+    inviter = User.query.get(invite.invited_by_id)
+    return jsonify({
+        'email': invite.email,
+        'invited_by': inviter.username if inviter else 'Unknown',
+        'expires_at': invite.expires_at.isoformat()
+    })
+
 @api_bp.route('/users/<int:user_id>/databases', methods=['GET'])
 @admin_required
 def get_user_databases(user_id):
@@ -802,7 +968,7 @@ def process_auto_payments():
 
 @api_bp.route('/api/version', methods=['GET'])
 def get_version():
-    return jsonify({'version': '3.2.10', 'license': "O'Saasy", 'license_url': 'https://osaasy.dev/', 'features': ['enhanced_frequencies', 'auto_payments', 'postgresql_saas', 'row_tenancy']})
+    return jsonify({'version': '3.2.14', 'license': "O'Saasy", 'license_url': 'https://osaasy.dev/', 'features': ['enhanced_frequencies', 'auto_payments', 'postgresql_saas', 'row_tenancy', 'user_invites']})
 
 @api_bp.route('/ping')
 def ping(): return jsonify({'status': 'ok'})
@@ -1963,12 +2129,12 @@ def jwt_get_version():
     return jsonify({
         'success': True,
         'data': {
-            'version': '3.2.10',
+            'version': '3.2.14',
             'api_version': 'v2',
             'license': "O'Saasy",
             'license_url': 'https://osaasy.dev/',
             'deployment_mode': DEPLOYMENT_MODE,
-            'features': ['jwt_auth', 'mobile_api', 'enhanced_frequencies', 'auto_payments', 'postgresql_saas', 'row_tenancy']
+            'features': ['jwt_auth', 'mobile_api', 'enhanced_frequencies', 'auto_payments', 'postgresql_saas', 'row_tenancy', 'user_invites']
         }
     })
 
