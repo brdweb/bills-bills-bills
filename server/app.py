@@ -1103,8 +1103,8 @@ def create_checkout():
     if not user:
         return jsonify({'success': False, 'error': 'User not found'}), 404
 
-    # Check if user already has active subscription
-    if user.subscription and user.subscription.is_active:
+    # Check if user already has active paid subscription (allow trialing users to convert)
+    if user.subscription and user.subscription.is_active and not user.subscription.is_trialing:
         return jsonify({'success': False, 'error': 'You already have an active subscription'}), 400
 
     # Get tier and interval from request
