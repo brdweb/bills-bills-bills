@@ -553,7 +553,7 @@ def users_handler():
             ).all()
         else:
             users = User.query.all()
-        return jsonify([{'id': u.id, 'username': u.username, 'role': u.role} for u in users])
+        return jsonify([{'id': u.id, 'username': u.username, 'role': u.role, 'email': u.email} for u in users])
     else:
         data = request.get_json(); username, password = data.get('username'), data.get('password')
         if User.query.filter_by(username=username).first(): return jsonify({'error': 'Taken'}), 400
@@ -570,6 +570,28 @@ def users_handler():
                     continue  # Skip databases not owned by this admin
                 new_user.accessible_databases.append(d)
         db.session.commit(); return jsonify({'message': 'Created', 'id': new_user.id}), 201
+
+@api_bp.route('/users/<int:user_id>', methods=['PUT'])
+@admin_required
+def update_user(user_id):
+    user = User.query.get_or_404(user_id)
+    current_user_id = session.get('user_id')
+    # In SaaS mode, only allow updating users you created (or yourself, or legacy users)
+    if is_saas() and user.id != current_user_id:
+        if user.created_by_id is not None and user.created_by_id != current_user_id:
+            return jsonify({'error': 'Access denied'}), 403
+    data = request.get_json()
+    # Update email if provided
+    if 'email' in data:
+        new_email = data['email'].strip() if data['email'] else None
+        if new_email and new_email != user.email:
+            # Check for uniqueness
+            existing = User.query.filter(User.email == new_email, User.id != user_id).first()
+            if existing:
+                return jsonify({'error': 'Email already in use'}), 400
+        user.email = new_email
+    db.session.commit()
+    return jsonify({'id': user.id, 'username': user.username, 'role': user.role, 'email': user.email})
 
 @api_bp.route('/users/<int:user_id>', methods=['DELETE'])
 @admin_required

@@ -26,6 +26,7 @@ export interface User {
   id: number;
   username: string;
   role: 'admin' | 'user';
+  email?: string | null;
 }
 
 export interface Database {
@@ -143,6 +144,9 @@ export const addUser = (
 ) => api.post('/users', { username, password, role, database_ids });
 
 export const deleteUser = (userId: number) => api.delete(`/users/${userId}`);
+
+export const updateUser = (userId: number, data: { email?: string | null }) =>
+  api.put<User>(`/users/${userId}`, data);
 
 export const getUserDatabases = (userId: number) =>
   api.get<Database[]>(`/users/${userId}/databases`);

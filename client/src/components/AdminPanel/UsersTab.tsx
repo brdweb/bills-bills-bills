@@ -22,6 +22,7 @@ import {
   getUsers,
   addUser,
   deleteUser,
+  updateUser,
   getDatabases,
   getUserDatabases,
   grantDatabaseAccess,
@@ -41,9 +42,10 @@ export function UsersTab() {
   const [selectedDatabases, setSelectedDatabases] = useState<number[]>([]);
   const [addLoading, setAddLoading] = useState(false);
 
-  // Edit access modal
+  // Edit user modal
   const [editingUser, setEditingUser] = useState<User | null>(null);
   const [userDatabases, setUserDatabases] = useState<number[]>([]);
+  const [userEmail, setUserEmail] = useState('');
   const [accessLoading, setAccessLoading] = useState(false);
 
   useEffect(() => {
@@ -94,8 +96,9 @@ export function UsersTab() {
     }
   };
 
-  const handleEditAccess = async (user: User) => {
+  const handleEditUser = async (user: User) => {
     setEditingUser(user);
+    setUserEmail(user.email || '');
     setAccessLoading(true);
     try {
       const response = await getUserDatabases(user.id);
@@ -107,11 +110,17 @@ export function UsersTab() {
     }
   };
 
-  const handleSaveAccess = async () => {
+  const handleSaveUser = async () => {
     if (!editingUser) return;
 
     setAccessLoading(true);
     try {
+      // Update email if changed
+      const newEmail = userEmail.trim() || null;
+      if (newEmail !== (editingUser.email || null)) {
+        await updateUser(editingUser.id, { email: newEmail });
+      }
+
       // Get current databases
       const currentRes = await getUserDatabases(editingUser.id);
       const currentDbIds = currentRes.data.map((db) => db.id!);
@@ -126,9 +135,10 @@ export function UsersTab() {
         ...toRemove.map((dbId) => revokeDatabaseAccess(dbId, editingUser.id)),
       ]);
 
+      await fetchData(); // Refresh the user list
       setEditingUser(null);
     } catch (error: any) {
-      alert(error.response?.data?.error || 'Failed to update access');
+      alert(error.response?.data?.error || 'Failed to update user');
     } finally {
       setAccessLoading(false);
     }
@@ -148,6 +158,7 @@ export function UsersTab() {
         <Table.Thead>
           <Table.Tr>
             <Table.Th>Username</Table.Th>
+            <Table.Th>Email</Table.Th>
             <Table.Th>Role</Table.Th>
             <Table.Th>Actions</Table.Th>
           </Table.Tr>
@@ -156,6 +167,11 @@ export function UsersTab() {
           {users.map((user) => (
             <Table.Tr key={user.id}>
               <Table.Td>{user.username}</Table.Td>
+              <Table.Td>
+                <Text size="sm" c={user.email ? undefined : 'dimmed'}>
+                  {user.email || '—'}
+                </Text>
+              </Table.Td>
               <Table.Td>
                 <Badge color={user.role === 'admin' ? 'orange' : 'blue'}>
                   {user.role}
@@ -166,8 +182,8 @@ export function UsersTab() {
                   <ActionIcon
                     variant="subtle"
                     color="blue"
-                    onClick={() => handleEditAccess(user)}
-                    title="Edit Access"
+                    onClick={() => handleEditUser(user)}
+                    title="Edit User"
                   >
                     <IconEdit size={18} />
                   </ActionIcon>
@@ -254,11 +270,11 @@ export function UsersTab() {
         </Paper>
       )}
 
-      {/* Edit Access Modal */}
+      {/* Edit User Modal */}
       <Modal
         opened={!!editingUser}
         onClose={() => setEditingUser(null)}
-        title={`Bill Group Access: ${editingUser?.username}`}
+        title={`Edit User: ${editingUser?.username}`}
         centered
       >
         <Stack gap="md">
@@ -268,6 +284,16 @@ export function UsersTab() {
             </Center>
           ) : (
             <>
+              <TextInput
+                label="Email"
+                placeholder="user@example.com"
+                value={userEmail}
+                onChange={(e) => setUserEmail(e.currentTarget.value)}
+              />
+
+              <Text size="sm" fw={500}>
+                Bill Group Access
+              </Text>
               {databases.map((db) => (
                 <Checkbox
                   key={db.id}
@@ -288,7 +314,7 @@ export function UsersTab() {
                 <Button variant="default" onClick={() => setEditingUser(null)}>
                   Cancel
                 </Button>
-                <Button onClick={handleSaveAccess}>Save Changes</Button>
+                <Button onClick={handleSaveUser}>Save Changes</Button>
               </Group>
             </>
           )}
