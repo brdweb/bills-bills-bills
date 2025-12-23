@@ -40,3 +40,6 @@ marketing/
 # Environment files (contain secrets)
 .env
 *.env.local
+
+# Scripts with credentials
+setup_kuma.py
