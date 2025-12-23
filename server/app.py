@@ -634,7 +634,7 @@ def invite_user():
 
     # Check for pending invite to same email
     pending_invite = UserInvite.query.filter_by(email=email, accepted_at=None).filter(
-        UserInvite.expires_at > datetime.utcnow()
+        UserInvite.expires_at > datetime.datetime.utcnow()
     ).first()
     if pending_invite:
         return jsonify({'error': 'An invitation has already been sent to this email'}), 400
@@ -657,7 +657,7 @@ def invite_user():
         token=token,
         role=role,
         invited_by_id=current_user_id,
-        expires_at=datetime.utcnow() + timedelta(days=7)
+        expires_at=datetime.datetime.utcnow() + timedelta(days=7)
     )
     # Store database IDs in a simple format (we'll use them when accepting)
     invite.database_ids = ','.join(str(id) for id in database_ids) if database_ids else ''
@@ -678,7 +678,7 @@ def get_invites():
     """Get pending invitations sent by current admin"""
     current_user_id = session.get('user_id')
     invites = UserInvite.query.filter_by(invited_by_id=current_user_id, accepted_at=None).filter(
-        UserInvite.expires_at > datetime.utcnow()
+        UserInvite.expires_at > datetime.datetime.utcnow()
     ).all()
     return jsonify([{
         'id': inv.id,
@@ -732,7 +732,7 @@ def accept_invite():
         email=invite.email,
         role=invite.role,
         created_by_id=invite.invited_by_id,
-        email_verified_at=datetime.utcnow()  # Auto-verify since they received the invite email
+        email_verified_at=datetime.datetime.utcnow()  # Auto-verify since they received the invite email
     )
     new_user.set_password(password)
     db.session.add(new_user)
@@ -749,7 +749,7 @@ def accept_invite():
                 pass
 
     # Mark invitation as accepted
-    invite.accepted_at = datetime.utcnow()
+    invite.accepted_at = datetime.datetime.utcnow()
     db.session.commit()
 
     return jsonify({'message': 'Account created successfully', 'username': username}), 201
