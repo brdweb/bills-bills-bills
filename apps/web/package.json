@@ -16,20 +16,14 @@
     "@mantine/form": "^8.3.9",
     "@mantine/hooks": "^8.3.9",
     "@tabler/icons-react": "^3.35.0",
-    "@tamagui/animations-css": "^1.141.5",
-    "@tamagui/font-inter": "^1.141.5",
-    "@tamagui/shorthands": "^1.141.5",
-    "@tamagui/vite-plugin": "^1.141.5",
     "axios": "^1.13.2",
     "dayjs": "^1.11.19",
     "jspdf": "^3.0.4",
     "jspdf-autotable": "^5.0.2",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
-    "react-native-web": "^0.21.2",
     "react-router-dom": "^7.10.1",
-    "recharts": "^3.5.1",
-    "tamagui": "^1.141.5"
+    "recharts": "^3.5.1"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.1",

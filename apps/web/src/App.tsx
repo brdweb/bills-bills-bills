@@ -14,7 +14,6 @@ import { AdminModal } from './components/AdminPanel/AdminModal';
 import { MonthlyTotalsChart } from './components/MonthlyTotalsChart';
 import { AllPayments } from './pages/AllPayments';
 import { Login } from './pages/Login';
-import { LoginTamagui } from './pages/LoginTamagui';
 import { VerifyEmail } from './pages/VerifyEmail';
 import { ForgotPassword } from './pages/ForgotPassword';
 import { ResetPassword } from './pages/ResetPassword';
@@ -254,7 +253,7 @@ function App() {
   }
 
   // Public routes - no authentication required
-  const publicRoutes = ['/login', '/login-tamagui', '/register', '/verify-email', '/forgot-password', '/reset-password', '/resend-verification', '/accept-invite'];
+  const publicRoutes = ['/login', '/register', '/verify-email', '/forgot-password', '/reset-password', '/resend-verification', '/accept-invite'];
   const isPublicRoute = publicRoutes.includes(location.pathname);
 
   // If not logged in and not on a public route, render just the routes (no Layout)
@@ -272,7 +271,6 @@ function App() {
     return (
       <Routes>
         <Route path="/login" element={<Login />} />
-        <Route path="/login-tamagui" element={<LoginTamagui />} />
         <Route path="/register" element={<Login />} />
         <Route path="/verify-email" element={<VerifyEmail />} />
         <Route path="/forgot-password" element={<ForgotPassword />} />

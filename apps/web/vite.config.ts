@@ -1,34 +1,9 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
-import { tamaguiPlugin } from '@tamagui/vite-plugin'
-import path from 'path'
 
 // https://vite.dev/config/
 export default defineConfig({
-  plugins: [
-    react(),
-    tamaguiPlugin({
-      config: './src/tamagui.config.ts',
-      components: ['tamagui'],
-    }),
-  ],
-  define: {
-    'process.env.TAMAGUI_TARGET': JSON.stringify('web'),
-  },
-  resolve: {
-    alias: {
-      '@billmanager/ui': path.resolve(__dirname, '../../packages/ui/src'),
-      // React Native Web aliases for Tamagui
-      'react-native': 'react-native-web',
-      'react-native-web': path.resolve(__dirname, 'node_modules/react-native-web'),
-    },
-  },
-  optimizeDeps: {
-    include: ['react-native-web'],
-    esbuildOptions: {
-      resolveExtensions: ['.web.js', '.web.jsx', '.web.ts', '.web.tsx', '.js', '.jsx', '.ts', '.tsx'],
-    },
-  },
+  plugins: [react()],
   server: {
     port: 5173,
     proxy: {

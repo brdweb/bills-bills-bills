@@ -10,20 +10,17 @@ import { theme } from './theme';
 import App from './App';
 import { AuthProvider } from './context/AuthContext';
 import { ConfigProvider } from './context/ConfigContext';
-import { TamaguiProvider } from './TamaguiProvider';
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <TamaguiProvider>
-      <MantineProvider theme={theme} defaultColorScheme="light">
-        <BrowserRouter>
-          <ConfigProvider>
-            <AuthProvider>
-              <App />
-            </AuthProvider>
-          </ConfigProvider>
-        </BrowserRouter>
-      </MantineProvider>
-    </TamaguiProvider>
+    <MantineProvider theme={theme} defaultColorScheme="light">
+      <BrowserRouter>
+        <ConfigProvider>
+          <AuthProvider>
+            <App />
+          </AuthProvider>
+        </ConfigProvider>
+      </BrowserRouter>
+    </MantineProvider>
   </StrictMode>
 );
