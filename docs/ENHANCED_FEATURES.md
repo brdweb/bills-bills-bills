@@ -119,7 +119,7 @@ CREATE TABLE schema_version (
 - All existing data preserved and enhanced
 
 ## 📊 Version Information
-- **Current Version**: 3.3.2
+- **Current Version**: 3.3.3
 - **Migration Schema**: Automatic via `schema_migrations` table
 - **Backward Compatible**: Yes
 - **Data Loss Risk**: None
