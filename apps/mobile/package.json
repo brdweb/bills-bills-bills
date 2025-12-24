@@ -26,12 +26,14 @@
     "expo-notifications": "~0.32.15",
     "expo-secure-store": "~15.0.8",
     "expo-status-bar": "~3.0.9",
+    "nativewind": "^4.2.1",
     "react": "19.1.0",
     "react-native": "0.81.5",
     "react-native-gesture-handler": "^2.30.0",
     "react-native-reanimated": "~4.1.1",
     "react-native-safe-area-context": "~5.6.0",
     "react-native-screens": "~4.16.0",
+    "tailwindcss": "^3.4.17",
     "tamagui": "^1.141.5"
   },
   "devDependencies": {
