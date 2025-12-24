@@ -1,0 +1,323 @@
+from flask_sqlalchemy import SQLAlchemy
+from datetime import datetime, timedelta
+import hashlib
+import secrets
+from werkzeug.security import generate_password_hash, check_password_hash
+
+db = SQLAlchemy()
+
+# Association table for User-Database access (Tenancy)
+user_database_access = db.Table('user_database_access',
+    db.Column('user_id', db.Integer, db.ForeignKey('users.id'), primary_key=True),
+    db.Column('database_id', db.Integer, db.ForeignKey('databases.id'), primary_key=True)
+)
+
+class User(db.Model):
+    __tablename__ = 'users'
+    id = db.Column(db.Integer, primary_key=True)
+    username = db.Column(db.String(80), unique=True, nullable=False)
+    password_hash = db.Column(db.String(256), nullable=False)
+    role = db.Column(db.String(20), default='user')
+    password_change_required = db.Column(db.Boolean, default=False)
+    change_token = db.Column(db.String(64), nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    # SaaS multi-tenancy: track which admin created this user (null for self-registered admins)
+    created_by_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
+
+    # Email and verification (for SaaS registration)
+    email = db.Column(db.String(255), unique=True, nullable=True)
+    email_verified_at = db.Column(db.DateTime, nullable=True)
+    email_verification_token = db.Column(db.String(64), nullable=True)
+    email_verification_expires = db.Column(db.DateTime, nullable=True)
+
+    # Password reset
+    password_reset_token = db.Column(db.String(64), nullable=True)
+    password_reset_expires = db.Column(db.DateTime, nullable=True)
+
+    # Trial tracking
+    trial_ends_at = db.Column(db.DateTime, nullable=True)
+
+    # Relationships
+    accessible_databases = db.relationship('Database', secondary=user_database_access, backref='users')
+    created_by = db.relationship('User', remote_side='User.id', foreign_keys=[created_by_id], backref='created_users')
+
+    @property
+    def is_account_owner(self):
+        """Check if this user is an account owner (self-registered admin, not a sub-user)"""
+        return self.role == 'admin' and self.created_by_id is None
+
+    @property
+    def account_owner(self):
+        """Get the account owner for this user (self if admin, or the admin who created them)"""
+        if self.is_account_owner:
+            return self
+        if self.created_by_id:
+            return User.query.get(self.created_by_id)
+        return None
+
+    def set_password(self, password):
+        """Hash password using werkzeug's secure method (pbkdf2:sha256)."""
+        self.password_hash = generate_password_hash(password)
+
+    def check_password(self, password):
+        """
+        Verify password. Supports both:
+        - New bcrypt/pbkdf2 hashes (werkzeug format)
+        - Legacy SHA-256 hashes (for migration)
+        """
+        # Check if this is a legacy SHA-256 hash (64 hex chars, no prefix)
+        if len(self.password_hash) == 64 and not self.password_hash.startswith(('pbkdf2:', 'scrypt:')):
+            # Legacy SHA-256 verification
+            if self.password_hash == hashlib.sha256(password.encode()).hexdigest():
+                # Auto-migrate to secure hash on successful login
+                self.set_password(password)
+                return True
+            return False
+        # Modern werkzeug hash verification
+        return check_password_hash(self.password_hash, password)
+
+    def generate_email_verification_token(self):
+        """Generate a secure token for email verification (24 hour expiry)"""
+        self.email_verification_token = secrets.token_urlsafe(32)
+        self.email_verification_expires = datetime.utcnow() + timedelta(hours=24)
+        return self.email_verification_token
+
+    def generate_password_reset_token(self):
+        """Generate a secure token for password reset (1 hour expiry)"""
+        self.password_reset_token = secrets.token_urlsafe(32)
+        self.password_reset_expires = datetime.utcnow() + timedelta(hours=1)
+        return self.password_reset_token
+
+    def verify_email_token(self, token):
+        """Verify the email verification token"""
+        if not self.email_verification_token or not self.email_verification_expires:
+            return False
+        if self.email_verification_token != token:
+            return False
+        if datetime.utcnow() > self.email_verification_expires:
+            return False
+        return True
+
+    def verify_password_reset_token(self, token):
+        """Verify the password reset token"""
+        if not self.password_reset_token or not self.password_reset_expires:
+            return False
+        if self.password_reset_token != token:
+            return False
+        if datetime.utcnow() > self.password_reset_expires:
+            return False
+        return True
+
+    @property
+    def is_email_verified(self):
+        return self.email_verified_at is not None
+
+    @property
+    def is_trial_active(self):
+        if not self.trial_ends_at:
+            return False
+        return datetime.utcnow() < self.trial_ends_at
+
+    @property
+    def has_active_subscription(self):
+        """Check if user has an active subscription"""
+        if not hasattr(self, 'subscription') or not self.subscription:
+            return False
+        return self.subscription.status in ('active', 'trialing')
+
+class Database(db.Model):
+    __tablename__ = 'databases'
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(50), unique=True, nullable=False)
+    display_name = db.Column(db.String(100), nullable=False)
+    description = db.Column(db.String(255))
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    # Owner tracking for SaaS multi-tenancy (which admin owns this database)
+    owner_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
+
+    # Relationships
+    bills = db.relationship('Bill', backref='database', lazy=True, cascade="all, delete-orphan")
+    owner = db.relationship('User', foreign_keys=[owner_id], backref='owned_databases')
+
+class Bill(db.Model):
+    __tablename__ = 'bills'
+    id = db.Column(db.Integer, primary_key=True)
+    database_id = db.Column(db.Integer, db.ForeignKey('databases.id'), nullable=False)
+    name = db.Column(db.String(100), nullable=False)
+    amount = db.Column(db.Float, nullable=True)
+    is_variable = db.Column(db.Boolean, default=False)
+    frequency = db.Column(db.String(50), nullable=False) # monthly, weekly, etc.
+    due_date = db.Column(db.String(10), nullable=False) # YYYY-MM-DD
+    type = db.Column(db.String(20), default='expense') # expense or deposit
+    account = db.Column(db.String(100))
+    icon = db.Column(db.String(50))
+    auto_pay = db.Column(db.Boolean, default=False)
+    
+    # Legacy/Advanced Frequency Support
+    frequency_type = db.Column(db.String(20), default='simple')
+    frequency_config = db.Column(db.Text, default='{}') # JSON string
+    archived = db.Column(db.Boolean, default=False)
+    
+    category = db.Column(db.String(50))
+    notes = db.Column(db.Text)
+    last_updated = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    # Relationships
+    payments = db.relationship('Payment', backref='bill', lazy=True, cascade="all, delete-orphan")
+
+class Payment(db.Model):
+    __tablename__ = 'payments'
+    id = db.Column(db.Integer, primary_key=True)
+    bill_id = db.Column(db.Integer, db.ForeignKey('bills.id'), nullable=False)
+    amount = db.Column(db.Float, nullable=False)
+    payment_date = db.Column(db.String(10), nullable=False) # YYYY-MM-DD
+    notes = db.Column(db.Text)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class RefreshToken(db.Model):
+    """Stores refresh tokens for JWT authentication (mobile apps)"""
+    __tablename__ = 'refresh_tokens'
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    token_hash = db.Column(db.String(64), nullable=False, unique=True)
+    expires_at = db.Column(db.DateTime, nullable=False)
+    revoked = db.Column(db.Boolean, default=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    # Track device/client info for token management
+    device_info = db.Column(db.String(255), nullable=True)
+
+    # Relationship
+    user = db.relationship('User', backref=db.backref('refresh_tokens', lazy=True))
+
+
+class UserDevice(db.Model):
+    """Stores registered devices for push notifications"""
+    __tablename__ = 'user_devices'
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+
+    # Device identification
+    device_id = db.Column(db.String(255), nullable=False)  # Unique device identifier
+    device_name = db.Column(db.String(100), nullable=True)  # User-friendly name (e.g., "iPhone 15")
+    platform = db.Column(db.String(20), nullable=False)  # ios, android, web, desktop
+
+    # Push notification tokens
+    push_token = db.Column(db.String(500), nullable=True)  # FCM/APNS token
+    push_provider = db.Column(db.String(20), nullable=True)  # fcm, apns, expo
+
+    # Device metadata
+    app_version = db.Column(db.String(20), nullable=True)
+    os_version = db.Column(db.String(50), nullable=True)
+    last_active_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    # Notification preferences (JSON string)
+    notification_settings = db.Column(db.Text, default='{}')
+
+    # Relationship
+    user = db.relationship('User', backref=db.backref('devices', lazy=True))
+
+    # Unique constraint: one device_id per user
+    __table_args__ = (
+        db.UniqueConstraint('user_id', 'device_id', name='uq_user_device'),
+    )
+
+
+class UserInvite(db.Model):
+    """Stores pending user invitations"""
+    __tablename__ = 'user_invites'
+    id = db.Column(db.Integer, primary_key=True)
+    email = db.Column(db.String(255), nullable=False)
+    token = db.Column(db.String(64), unique=True, nullable=False)
+    role = db.Column(db.String(20), default='user')
+    invited_by_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    database_ids = db.Column(db.String(255), default='')  # Comma-separated list of database IDs
+    expires_at = db.Column(db.DateTime, nullable=False)
+    accepted_at = db.Column(db.DateTime, nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    # Relationship
+    invited_by = db.relationship('User', backref=db.backref('sent_invites', lazy=True))
+
+    @property
+    def is_expired(self):
+        return datetime.utcnow() > self.expires_at
+
+    @property
+    def is_accepted(self):
+        return self.accepted_at is not None
+
+    @property
+    def is_valid(self):
+        return not self.is_expired and not self.is_accepted
+
+
+class Subscription(db.Model):
+    """Stores Stripe subscription information for billing"""
+    __tablename__ = 'subscriptions'
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False, unique=True)
+
+    # Stripe identifiers
+    stripe_customer_id = db.Column(db.String(255), nullable=True)
+    stripe_subscription_id = db.Column(db.String(255), nullable=True)
+
+    # Plan and tier info
+    plan = db.Column(db.String(50), default='early_adopter')  # Legacy: early_adopter
+    tier = db.Column(db.String(20), default='free')  # free, basic, plus
+    billing_interval = db.Column(db.String(20), default='monthly')  # monthly, annual
+    status = db.Column(db.String(50), default='trialing')  # trialing, active, canceled, past_due, unpaid
+
+    # Billing dates
+    trial_ends_at = db.Column(db.DateTime, nullable=True)
+    current_period_start = db.Column(db.DateTime, nullable=True)
+    current_period_end = db.Column(db.DateTime, nullable=True)
+    canceled_at = db.Column(db.DateTime, nullable=True)
+
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    # Relationship
+    user = db.relationship('User', backref=db.backref('subscription', uselist=False))
+
+    @property
+    def is_active(self):
+        """Check if subscription allows full access"""
+        return self.status in ('active', 'trialing')
+
+    @property
+    def is_trialing(self):
+        return self.status == 'trialing'
+
+    @property
+    def is_trial_expired(self):
+        """Check if trial period has ended without converting to paid"""
+        if self.status != 'trialing':
+            return False
+        if not self.trial_ends_at:
+            return False
+        return datetime.utcnow() > self.trial_ends_at
+
+    @property
+    def effective_tier(self):
+        """Get the effective tier based on subscription status"""
+        # Active paid subscription gets their tier
+        if self.status == 'active' and self.tier in ('basic', 'plus'):
+            return self.tier
+        # Trialing users get basic tier features during trial
+        if self.status == 'trialing' and not self.is_trial_expired:
+            return 'basic'
+        # Expired trial or no subscription = free tier
+        return 'free'
+
+    @property
+    def days_until_renewal(self):
+        if not self.current_period_end:
+            return None
+        delta = self.current_period_end - datetime.utcnow()
+        return max(0, delta.days)
