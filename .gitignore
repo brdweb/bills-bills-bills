@@ -30,8 +30,8 @@ client-backup/
 # Internal docs (not for public repo)
 HANDOFF_DEBUG.md
 GEMINI.md
+GO-TO-MARKET.md
 GO_TO_MARKET*.md
-docs/GO_TO_MARKET*.md
 plan.md
 
 # Test files

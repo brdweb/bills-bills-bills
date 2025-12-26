@@ -23,17 +23,17 @@ jobs:
         with:
           python-version: '3.12'
           cache: 'pip'
-          cache-dependency-path: server/requirements.txt
+          cache-dependency-path: apps/server/requirements.txt
 
       - name: Install Python dependencies
         run: |
-          cd server
+          cd apps/server
           pip install -r requirements.txt
           pip install pytest
 
       - name: Run Python tests
         run: |
-          cd server
+          cd apps/server
           pytest -v || echo "No tests found, skipping"
 
       - name: Set up Node.js
@@ -41,16 +41,16 @@ jobs:
         with:
           node-version: '20'
           cache: 'npm'
-          cache-dependency-path: client/package-lock.json
+          cache-dependency-path: apps/web/package-lock.json
 
       - name: Install frontend dependencies
         run: |
-          cd client
+          cd apps/web
           npm ci
 
       - name: Build frontend (TypeScript check)
         run: |
-          cd client
+          cd apps/web
           npm run build
 
   build:
