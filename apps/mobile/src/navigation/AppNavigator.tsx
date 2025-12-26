@@ -2,11 +2,13 @@ import React from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { View, ActivityIndicator, StyleSheet } from 'react-native';
+import { View, ActivityIndicator, StyleSheet, Platform } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import LoginScreen from '../screens/LoginScreen';
+import ForgotPasswordScreen from '../screens/ForgotPasswordScreen';
 import BillsScreen from '../screens/BillsScreen';
 import BillDetailScreen from '../screens/BillDetailScreen';
 import AddBillScreen from '../screens/AddBillScreen';
@@ -16,12 +18,18 @@ import UserManagementScreen from '../screens/UserManagementScreen';
 import InvitationsScreen from '../screens/InvitationsScreen';
 import DatabaseManagementScreen from '../screens/DatabaseManagementScreen';
 import PaymentHistoryScreen from '../screens/PaymentHistoryScreen';
+import SubscriptionScreen from '../screens/SubscriptionScreen';
 import { Bill } from '../types';
 
 // Navigation types
 export type RootStackParamList = {
   Auth: undefined;
   Main: undefined;
+};
+
+export type AuthStackParamList = {
+  Login: undefined;
+  ForgotPassword: undefined;
 };
 
 export type MainTabParamList = {
@@ -46,14 +54,25 @@ export type SettingsStackParamList = {
   UserManagement: undefined;
   Invitations: undefined;
   DatabaseManagement: undefined;
-  PaymentHistory: undefined;
+  Subscription: undefined;
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
+const AuthStack = createNativeStackNavigator<AuthStackParamList>();
 const Tab = createBottomTabNavigator<MainTabParamList>();
 const BillsStack = createNativeStackNavigator<BillsStackParamList>();
 const StatsStackNav = createNativeStackNavigator<StatsStackParamList>();
 const SettingsStack = createNativeStackNavigator<SettingsStackParamList>();
+
+// Auth stack navigator
+function AuthStackNavigator() {
+  return (
+    <AuthStack.Navigator screenOptions={{ headerShown: false }}>
+      <AuthStack.Screen name="Login" component={LoginScreen} />
+      <AuthStack.Screen name="ForgotPassword" component={ForgotPasswordScreen} />
+    </AuthStack.Navigator>
+  );
+}
 
 // Bills stack navigator
 function BillsStackNavigator() {
@@ -84,7 +103,7 @@ function SettingsStackNavigator() {
       <SettingsStack.Screen name="UserManagement" component={UserManagementScreen} />
       <SettingsStack.Screen name="Invitations" component={InvitationsScreen} />
       <SettingsStack.Screen name="DatabaseManagement" component={DatabaseManagementScreen} />
-      <SettingsStack.Screen name="PaymentHistory" component={PaymentHistoryScreen} />
+      <SettingsStack.Screen name="Subscription" component={SubscriptionScreen} />
     </SettingsStack.Navigator>
   );
 }
@@ -92,6 +111,10 @@ function SettingsStackNavigator() {
 // Main app tabs
 function MainTabs() {
   const { colors } = useTheme();
+  const insets = useSafeAreaInsets();
+
+  // Calculate tab bar height based on safe area
+  const tabBarHeight = 56 + Math.max(insets.bottom, 8);
 
   return (
     <Tab.Navigator
@@ -101,8 +124,8 @@ function MainTabs() {
           backgroundColor: colors.surface,
           borderTopColor: colors.border,
           borderTopWidth: 1,
-          height: 60,
-          paddingBottom: 8,
+          height: tabBarHeight,
+          paddingBottom: Math.max(insets.bottom, 8),
           paddingTop: 8,
         },
         tabBarActiveTintColor: colors.primary,
@@ -175,7 +198,7 @@ export default function AppNavigator() {
         {isAuthenticated ? (
           <Stack.Screen name="Main" component={MainTabs} />
         ) : (
-          <Stack.Screen name="Auth" component={LoginScreen} />
+          <Stack.Screen name="Auth" component={AuthStackNavigator} />
         )}
       </Stack.Navigator>
     </NavigationContainer>

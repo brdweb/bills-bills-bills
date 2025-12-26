@@ -17,6 +17,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import { api } from '../api/client';
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
+import { useConfig } from '../context/ConfigContext';
 import { Invitation, DatabaseInfo } from '../types';
 
 type Props = NativeStackScreenProps<any, 'Invitations'>;
@@ -24,6 +25,7 @@ type Props = NativeStackScreenProps<any, 'Invitations'>;
 export default function InvitationsScreen({ navigation }: Props) {
   const { colors } = useTheme();
   const { databases } = useAuth();
+  const { emailEnabled } = useConfig();
   const [invitations, setInvitations] = useState<Invitation[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -224,6 +226,16 @@ export default function InvitationsScreen({ navigation }: Props) {
         </TouchableOpacity>
       </View>
 
+      {/* Email disabled warning banner */}
+      {!emailEnabled && (
+        <View style={[styles.warningBanner, { backgroundColor: colors.warning + '20' }]}>
+          <Text style={[styles.warningText, { color: colors.warning }]}>
+            Email is not configured. Invitation emails will not be sent automatically.
+            You'll need to share the invite link manually.
+          </Text>
+        </View>
+      )}
+
       {error ? (
         <View style={styles.centered}>
           <Text style={[styles.errorText, { color: colors.danger }]}>{error}</Text>
@@ -416,6 +428,17 @@ const styles = StyleSheet.create({
   addButtonText: {
     fontSize: 16,
     fontWeight: '600',
+  },
+  warningBanner: {
+    marginHorizontal: 16,
+    marginTop: 12,
+    padding: 12,
+    borderRadius: 8,
+  },
+  warningText: {
+    fontSize: 13,
+    lineHeight: 18,
+    textAlign: 'center',
   },
   list: {
     padding: 16,

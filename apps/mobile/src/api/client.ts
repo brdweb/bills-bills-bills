@@ -1,6 +1,6 @@
 import axios, { AxiosInstance, AxiosError } from 'axios';
 import * as SecureStore from 'expo-secure-store';
-import { ApiResponse, LoginResponse, Bill, Payment, SyncResponse, SyncPushRequest, SyncPushResponse, DeviceInfo, MonthlyStats, DatabaseInfo, AdminUser, Invitation, DatabaseWithAccess } from '../types';
+import { ApiResponse, LoginResponse, Bill, Payment, SyncResponse, SyncPushRequest, SyncPushResponse, DeviceInfo, MonthlyStats, DatabaseInfo, AdminUser, Invitation, DatabaseWithAccess, User, SubscriptionStatus, BillingUsage } from '../types';
 
 // Storage keys
 const ACCESS_TOKEN_KEY = 'billmanager_access_token';
@@ -93,7 +93,12 @@ class BillManagerApi {
 
   // Get current base URL (for debugging)
   getBaseUrl(): string {
-    return API_BASE_URL;
+    return this.client.defaults.baseURL || API_BASE_URL;
+  }
+
+  // Set base URL (for self-hosted servers)
+  setBaseUrl(url: string) {
+    this.client.defaults.baseURL = url;
   }
 
   // ============ Auth ============
@@ -178,6 +183,34 @@ class BillManagerApi {
     return this.currentDatabase;
   }
 
+  // ============ App Configuration ============
+
+  async getAppConfig(): Promise<ApiResponse<{
+    deployment_mode: 'saas' | 'self-hosted';
+    billing_enabled: boolean;
+    registration_enabled: boolean;
+    email_enabled: boolean;
+    email_verification_required: boolean;
+  }>> {
+    try {
+      const response = await axios.get(`${API_BASE_URL}/config`);
+      return response.data;
+    } catch (error) {
+      return this.handleError(error);
+    }
+  }
+
+  // ============ Password Reset ============
+
+  async forgotPassword(email: string): Promise<ApiResponse<{ message: string }>> {
+    try {
+      const response = await axios.post(`${API_BASE_URL}/auth/forgot-password`, { email });
+      return response.data;
+    } catch (error) {
+      return this.handleError(error);
+    }
+  }
+
   async getAccounts(): Promise<ApiResponse<DatabaseInfo[]>> {
     try {
       const response = await this.client.get<ApiResponse<{ databases: DatabaseInfo[] }>>('/me');
@@ -185,6 +218,15 @@ class BillManagerApi {
         return { success: true, data: response.data.data.databases };
       }
       return response.data as any;
+    } catch (error) {
+      return this.handleError(error);
+    }
+  }
+
+  async getUserInfo(): Promise<ApiResponse<{ user: User; databases: DatabaseInfo[] }>> {
+    try {
+      const response = await this.client.get<ApiResponse<{ user: User; databases: DatabaseInfo[] }>>('/me');
+      return response.data;
     } catch (error) {
       return this.handleError(error);
     }
@@ -239,6 +281,15 @@ class BillManagerApi {
     }
   }
 
+  async deleteBill(id: number): Promise<ApiResponse<void>> {
+    try {
+      const response = await this.client.delete<ApiResponse<void>>(`/bills/${id}/permanent`);
+      return response.data;
+    } catch (error) {
+      return this.handleError(error);
+    }
+  }
+
   async unarchiveBill(id: number): Promise<ApiResponse<void>> {
     try {
       const response = await this.client.post<ApiResponse<void>>(`/bills/${id}/unarchive`);
@@ -284,6 +335,19 @@ class BillManagerApi {
   async deletePayment(id: number): Promise<ApiResponse<void>> {
     try {
       const response = await this.client.delete<ApiResponse<void>>(`/payments/${id}`);
+      return response.data;
+    } catch (error) {
+      return this.handleError(error);
+    }
+  }
+
+  async updatePayment(id: number, amount: number, paymentDate: string, notes?: string): Promise<ApiResponse<void>> {
+    try {
+      const response = await this.client.put<ApiResponse<void>>(`/payments/${id}`, {
+        amount,
+        payment_date: paymentDate,
+        notes,
+      });
       return response.data;
     } catch (error) {
       return this.handleError(error);
@@ -390,6 +454,30 @@ class BillManagerApi {
   async updateUserRole(userId: number, role: 'admin' | 'user'): Promise<ApiResponse<void>> {
     try {
       const response = await this.client.put<ApiResponse<void>>(`/users/${userId}`, { role });
+      return response.data;
+    } catch (error) {
+      return this.handleError(error);
+    }
+  }
+
+  async updateUser(userId: number, data: { role?: 'admin' | 'user'; email?: string }): Promise<ApiResponse<AdminUser>> {
+    try {
+      const response = await this.client.put<ApiResponse<AdminUser>>(`/users/${userId}`, data);
+      return response.data;
+    } catch (error) {
+      return this.handleError(error);
+    }
+  }
+
+  async createUser(data: {
+    username: string;
+    password: string;
+    email?: string;
+    role: 'admin' | 'user';
+    database_ids: number[];
+  }): Promise<ApiResponse<AdminUser>> {
+    try {
+      const response = await this.client.post<ApiResponse<AdminUser>>('/users', data);
       return response.data;
     } catch (error) {
       return this.handleError(error);
@@ -509,6 +597,47 @@ class BillManagerApi {
         current_password: currentPassword,
         new_password: newPassword,
       });
+      return response.data;
+    } catch (error) {
+      return this.handleError(error);
+    }
+  }
+
+  // ============ Subscription & Billing ============
+
+  async getSubscriptionStatus(): Promise<ApiResponse<SubscriptionStatus>> {
+    try {
+      const response = await this.client.get<ApiResponse<SubscriptionStatus>>('/billing/status');
+      return response.data;
+    } catch (error) {
+      return this.handleError(error);
+    }
+  }
+
+  async getBillingUsage(): Promise<ApiResponse<BillingUsage>> {
+    try {
+      const response = await this.client.get<ApiResponse<BillingUsage>>('/billing/usage');
+      return response.data;
+    } catch (error) {
+      return this.handleError(error);
+    }
+  }
+
+  async createCheckoutSession(tier: 'basic' | 'plus', interval: 'monthly' | 'annual'): Promise<ApiResponse<{ url: string }>> {
+    try {
+      const response = await this.client.post<ApiResponse<{ url: string }>>('/billing/checkout', {
+        tier,
+        interval,
+      });
+      return response.data;
+    } catch (error) {
+      return this.handleError(error);
+    }
+  }
+
+  async createPortalSession(): Promise<ApiResponse<{ url: string }>> {
+    try {
+      const response = await this.client.post<ApiResponse<{ url: string }>>('/billing/portal');
       return response.data;
     } catch (error) {
       return this.handleError(error);

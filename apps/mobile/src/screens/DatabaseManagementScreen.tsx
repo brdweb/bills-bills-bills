@@ -16,7 +16,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import { api } from '../api/client';
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
-import { DatabaseWithAccess } from '../types';
+import { DatabaseWithAccess, AdminUser } from '../types';
 
 type Props = NativeStackScreenProps<any, 'DatabaseManagement'>;
 
@@ -34,6 +34,12 @@ export default function DatabaseManagementScreen({ navigation }: Props) {
   const [name, setName] = useState('');
   const [displayName, setDisplayName] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // User access modal state
+  const [showUserAccessModal, setShowUserAccessModal] = useState(false);
+  const [selectedDatabase, setSelectedDatabase] = useState<DatabaseWithAccess | null>(null);
+  const [allUsers, setAllUsers] = useState<AdminUser[]>([]);
+  const [isLoadingUsers, setIsLoadingUsers] = useState(false);
 
   const fetchDatabases = useCallback(async () => {
     try {
@@ -61,6 +67,16 @@ export default function DatabaseManagementScreen({ navigation }: Props) {
       fetchDatabases();
     }, [fetchDatabases])
   );
+
+  // Update selected database when databases list changes
+  useEffect(() => {
+    if (selectedDatabase) {
+      const updated = databases.find(d => d.id === selectedDatabase.id);
+      if (updated) {
+        setSelectedDatabase(updated);
+      }
+    }
+  }, [databases]);
 
   const handleRefresh = useCallback(() => {
     setIsRefreshing(true);
@@ -137,6 +153,65 @@ export default function DatabaseManagementScreen({ navigation }: Props) {
     );
   };
 
+  const openUserAccessModal = async (db: DatabaseWithAccess) => {
+    setSelectedDatabase(db);
+    setShowUserAccessModal(true);
+    setIsLoadingUsers(true);
+
+    try {
+      const response = await api.getUsers();
+      if (response.success && response.data) {
+        setAllUsers(response.data);
+      }
+    } catch (err) {
+      console.error('Failed to fetch users:', err);
+    } finally {
+      setIsLoadingUsers(false);
+    }
+  };
+
+  const handleAddUserAccess = async (userId: number) => {
+    if (!selectedDatabase) return;
+
+    const result = await api.addDatabaseAccess(selectedDatabase.id, userId);
+    if (result.success) {
+      fetchDatabases();
+    } else {
+      Alert.alert('Error', result.error || 'Failed to add user access');
+    }
+  };
+
+  const handleRemoveUserAccess = async (userId: number, username: string) => {
+    if (!selectedDatabase) return;
+
+    Alert.alert(
+      'Remove Access',
+      `Remove ${username}'s access to "${selectedDatabase.display_name}"?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Remove',
+          style: 'destructive',
+          onPress: async () => {
+            const result = await api.removeDatabaseAccess(selectedDatabase.id, userId);
+            if (result.success) {
+              fetchDatabases();
+            } else {
+              Alert.alert('Error', result.error || 'Failed to remove user access');
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  // Get users who don't have access to the selected database
+  const getAvailableUsers = () => {
+    if (!selectedDatabase) return [];
+    const currentUserIds = selectedDatabase.users?.map(u => u.user_id) || [];
+    return allUsers.filter(u => !currentUserIds.includes(u.id));
+  };
+
   const renderDatabase = ({ item }: { item: DatabaseWithAccess }) => {
     const userCount = item.users?.length || 0;
 
@@ -179,6 +254,12 @@ export default function DatabaseManagementScreen({ navigation }: Props) {
         )}
 
         <View style={styles.cardActions}>
+          <TouchableOpacity
+            style={[styles.manageUsersButton, { backgroundColor: colors.primary }]}
+            onPress={() => openUserAccessModal(item)}
+          >
+            <Text style={styles.manageUsersButtonText}>Manage Users</Text>
+          </TouchableOpacity>
           <TouchableOpacity
             style={[styles.deleteButton, { backgroundColor: colors.danger }]}
             onPress={() => handleDelete(item)}
@@ -324,6 +405,106 @@ export default function DatabaseManagementScreen({ navigation }: Props) {
           </View>
         </View>
       </Modal>
+
+      {/* User Access Modal */}
+      <Modal
+        visible={showUserAccessModal}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setShowUserAccessModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalContent, { backgroundColor: colors.surface, maxHeight: '80%' }]}>
+            <Text style={[styles.modalTitle, { color: colors.text }]}>
+              Manage Access
+            </Text>
+            {selectedDatabase && (
+              <Text style={[styles.modalSubtitle, { color: colors.textMuted }]}>
+                {selectedDatabase.display_name}
+              </Text>
+            )}
+
+            {isLoadingUsers ? (
+              <ActivityIndicator size="large" color={colors.primary} style={{ marginVertical: 20 }} />
+            ) : (
+              <View style={styles.userAccessContainer}>
+                {/* Current users with access */}
+                {selectedDatabase?.users && selectedDatabase.users.length > 0 && (
+                  <View style={styles.userAccessSection}>
+                    <Text style={[styles.userAccessSectionTitle, { color: colors.text }]}>
+                      Users with access
+                    </Text>
+                    {selectedDatabase.users.map((user) => (
+                      <View
+                        key={user.user_id}
+                        style={[styles.userAccessRow, { backgroundColor: colors.background }]}
+                      >
+                        <View>
+                          <Text style={[styles.userAccessName, { color: colors.text }]}>
+                            {user.username}
+                          </Text>
+                          <Text style={[styles.userAccessRole, { color: colors.textMuted }]}>
+                            {user.role}
+                          </Text>
+                        </View>
+                        <TouchableOpacity
+                          style={[styles.removeAccessButton, { backgroundColor: colors.danger }]}
+                          onPress={() => handleRemoveUserAccess(user.user_id, user.username)}
+                        >
+                          <Text style={styles.removeAccessButtonText}>Remove</Text>
+                        </TouchableOpacity>
+                      </View>
+                    ))}
+                  </View>
+                )}
+
+                {/* Available users to add */}
+                {getAvailableUsers().length > 0 && (
+                  <View style={styles.userAccessSection}>
+                    <Text style={[styles.userAccessSectionTitle, { color: colors.text }]}>
+                      Add users
+                    </Text>
+                    {getAvailableUsers().map((user) => (
+                      <View
+                        key={user.id}
+                        style={[styles.userAccessRow, { backgroundColor: colors.background }]}
+                      >
+                        <View>
+                          <Text style={[styles.userAccessName, { color: colors.text }]}>
+                            {user.username}
+                          </Text>
+                          <Text style={[styles.userAccessRole, { color: colors.textMuted }]}>
+                            {user.role}
+                          </Text>
+                        </View>
+                        <TouchableOpacity
+                          style={[styles.addAccessButton, { backgroundColor: colors.success }]}
+                          onPress={() => handleAddUserAccess(user.id)}
+                        >
+                          <Text style={styles.addAccessButtonText}>Add</Text>
+                        </TouchableOpacity>
+                      </View>
+                    ))}
+                  </View>
+                )}
+
+                {selectedDatabase?.users?.length === 0 && getAvailableUsers().length === 0 && (
+                  <Text style={[styles.noUsersText, { color: colors.textMuted }]}>
+                    No users available
+                  </Text>
+                )}
+              </View>
+            )}
+
+            <TouchableOpacity
+              style={[styles.closeButton, { backgroundColor: colors.border }]}
+              onPress={() => setShowUserAccessModal(false)}
+            >
+              <Text style={[styles.closeButtonText, { color: colors.text }]}>Done</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -430,6 +611,17 @@ const styles = StyleSheet.create({
   },
   cardActions: {
     marginTop: 8,
+    gap: 8,
+  },
+  manageUsersButton: {
+    padding: 12,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  manageUsersButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#fff',
   },
   deleteButton: {
     padding: 12,
@@ -526,5 +718,74 @@ const styles = StyleSheet.create({
   },
   buttonDisabled: {
     opacity: 0.7,
+  },
+  // User access modal styles
+  modalSubtitle: {
+    fontSize: 16,
+    textAlign: 'center',
+    marginBottom: 20,
+    marginTop: -16,
+  },
+  userAccessContainer: {
+    marginBottom: 16,
+  },
+  userAccessSection: {
+    marginBottom: 16,
+  },
+  userAccessSectionTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    marginBottom: 8,
+  },
+  userAccessRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 8,
+  },
+  userAccessName: {
+    fontSize: 16,
+    fontWeight: '500',
+  },
+  userAccessRole: {
+    fontSize: 12,
+    marginTop: 2,
+  },
+  removeAccessButton: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 6,
+  },
+  removeAccessButtonText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  addAccessButton: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 6,
+  },
+  addAccessButtonText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  noUsersText: {
+    textAlign: 'center',
+    fontSize: 14,
+    paddingVertical: 20,
+  },
+  closeButton: {
+    padding: 16,
+    borderRadius: 8,
+    alignItems: 'center',
+    marginTop: 8,
+  },
+  closeButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
   },
 });

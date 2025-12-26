@@ -1,38 +1,41 @@
+import './global.css';
 import React from 'react';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { StyleSheet } from 'react-native';
-import { TamaguiProvider, Theme } from 'tamagui';
 
-import { config } from './tamagui.config';
+import { GluestackUIProvider } from './components/ui';
 import { AuthProvider } from './src/context/AuthContext';
 import { ThemeProvider, useTheme } from './src/context/ThemeContext';
+import { ConfigProvider } from './src/context/ConfigContext';
 import AppNavigator from './src/navigation/AppNavigator';
 
 function AppContent() {
   const { isDark } = useTheme();
 
   return (
-    <Theme name={isDark ? 'dark' : 'light'}>
+    <>
       <StatusBar style={isDark ? 'light' : 'dark'} />
       <AppNavigator />
-    </Theme>
+    </>
   );
 }
 
 export default function App() {
   return (
     <GestureHandlerRootView style={styles.container}>
-      <TamaguiProvider config={config}>
+      <GluestackUIProvider mode="dark">
         <SafeAreaProvider>
-          <ThemeProvider>
-            <AuthProvider>
-              <AppContent />
-            </AuthProvider>
-          </ThemeProvider>
+          <ConfigProvider>
+            <ThemeProvider>
+              <AuthProvider>
+                <AppContent />
+              </AuthProvider>
+            </ThemeProvider>
+          </ConfigProvider>
         </SafeAreaProvider>
-      </TamaguiProvider>
+      </GluestackUIProvider>
     </GestureHandlerRootView>
   );
 }

@@ -10,11 +10,13 @@ import {
   Modal,
   TextInput,
   ActivityIndicator,
+  Linking,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useAuth } from '../context/AuthContext';
 import { useTheme, ThemeMode } from '../context/ThemeContext';
+import { useConfig } from '../context/ConfigContext';
 import { api } from '../api/client';
 
 type SettingsStackParamList = {
@@ -22,15 +24,16 @@ type SettingsStackParamList = {
   UserManagement: undefined;
   DatabaseManagement: undefined;
   Invitations: undefined;
-  PaymentHistory: undefined;
+  Subscription: undefined;
 };
 
 type NavigationProp = NativeStackNavigationProp<SettingsStackParamList, 'Settings'>;
 
 export default function SettingsScreen() {
   const navigation = useNavigation<NavigationProp>();
-  const { user, databases, currentDatabase, selectDatabase, logout } = useAuth();
+  const { user, logout } = useAuth();
   const { themeMode, isDark, colors, setThemeMode } = useTheme();
+  const { billingEnabled, emailEnabled, isSelfHosted } = useConfig();
 
   const isAdmin = user?.role === 'admin';
 
@@ -74,12 +77,6 @@ export default function SettingsScreen() {
     }
   };
 
-  const handleDatabaseChange = async (dbName: string) => {
-    if (dbName !== currentDatabase) {
-      await selectDatabase(dbName);
-    }
-  };
-
   const handleLogout = () => {
     Alert.alert(
       'Logout',
@@ -95,12 +92,10 @@ export default function SettingsScreen() {
     setThemeMode(mode);
   };
 
-  const currentDbInfo = databases.find(db => db.name === currentDatabase);
-
   const styles = createStyles(colors);
 
   return (
-    <ScrollView style={styles.container}>
+    <ScrollView style={styles.container} keyboardShouldPersistTaps="handled">
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Settings</Text>
       </View>
@@ -182,38 +177,6 @@ export default function SettingsScreen() {
         </View>
       </View>
 
-      {/* Bill Groups Section */}
-      {databases.length > 0 && (
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Bill Groups</Text>
-          <View style={styles.card}>
-            {databases.map((db, index) => (
-              <TouchableOpacity
-                key={db.id}
-                style={[
-                  styles.databaseRow,
-                  db.name === currentDatabase && styles.databaseRowSelected,
-                  index < databases.length - 1 && styles.databaseRowBorder,
-                ]}
-                onPress={() => handleDatabaseChange(db.name)}
-              >
-                <Text
-                  style={[
-                    styles.databaseName,
-                    db.name === currentDatabase && styles.databaseNameSelected,
-                  ]}
-                >
-                  {db.display_name}
-                </Text>
-                {db.name === currentDatabase && (
-                  <Text style={styles.checkmark}>✓</Text>
-                )}
-              </TouchableOpacity>
-            ))}
-          </View>
-        </View>
-      )}
-
       {/* Admin Section */}
       {isAdmin && (
         <View style={styles.section}>
@@ -221,21 +184,33 @@ export default function SettingsScreen() {
           <View style={styles.card}>
             <TouchableOpacity
               style={[styles.menuRow, styles.menuRowBorder]}
-              onPress={() => navigation.navigate('UserManagement' as never)}
+              onPress={() => {
+                console.log('[SettingsScreen] Navigating to UserManagement');
+                navigation.navigate('UserManagement' as never);
+              }}
             >
               <Text style={styles.menuLabel}>User Management</Text>
               <Text style={styles.menuArrow}>→</Text>
             </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.menuRow, styles.menuRowBorder]}
-              onPress={() => navigation.navigate('Invitations' as never)}
-            >
-              <Text style={styles.menuLabel}>Invitations</Text>
-              <Text style={styles.menuArrow}>→</Text>
-            </TouchableOpacity>
+            {/* Invitations - Only show when email is enabled (SaaS mode) */}
+            {emailEnabled && (
+              <TouchableOpacity
+                style={[styles.menuRow, styles.menuRowBorder]}
+                onPress={() => {
+                  console.log('[SettingsScreen] Navigating to Invitations');
+                  navigation.navigate('Invitations' as never);
+                }}
+              >
+                <Text style={styles.menuLabel}>Invitations</Text>
+                <Text style={styles.menuArrow}>→</Text>
+              </TouchableOpacity>
+            )}
             <TouchableOpacity
               style={styles.menuRow}
-              onPress={() => navigation.navigate('DatabaseManagement' as never)}
+              onPress={() => {
+                console.log('[SettingsScreen] Navigating to DatabaseManagement');
+                navigation.navigate('DatabaseManagement' as never);
+              }}
             >
               <Text style={styles.menuLabel}>Bill Groups</Text>
               <Text style={styles.menuArrow}>→</Text>
@@ -244,19 +219,21 @@ export default function SettingsScreen() {
         </View>
       )}
 
-      {/* Data Section */}
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Data</Text>
-        <View style={styles.card}>
-          <TouchableOpacity
-            style={styles.menuRow}
-            onPress={() => navigation.navigate('PaymentHistory' as never)}
-          >
-            <Text style={styles.menuLabel}>Payment History</Text>
-            <Text style={styles.menuArrow}>→</Text>
-          </TouchableOpacity>
+      {/* Subscription Section - Only show when billing is enabled (SaaS mode) */}
+      {billingEnabled && (
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Subscription</Text>
+          <View style={styles.card}>
+            <TouchableOpacity
+              style={styles.menuRow}
+              onPress={() => navigation.navigate('Subscription' as never)}
+            >
+              <Text style={styles.menuLabel}>Manage Subscription</Text>
+              <Text style={styles.menuArrow}>→</Text>
+            </TouchableOpacity>
+          </View>
         </View>
-      </View>
+      )}
 
       {/* About Section */}
       <View style={styles.section}>
@@ -266,10 +243,13 @@ export default function SettingsScreen() {
             <Text style={styles.label}>Version</Text>
             <Text style={styles.value}>1.0.0</Text>
           </View>
-          <View style={styles.row}>
-            <Text style={styles.label}>API</Text>
-            <Text style={styles.valueSmall}>{api.getBaseUrl()}</Text>
-          </View>
+          <TouchableOpacity
+            style={[styles.menuRow, { borderBottomWidth: 0 }]}
+            onPress={() => Linking.openURL('https://docs.billmanager.app')}
+          >
+            <Text style={styles.menuLabel}>Documentation</Text>
+            <Text style={styles.menuArrow}>↗</Text>
+          </TouchableOpacity>
         </View>
       </View>
 
@@ -451,32 +431,6 @@ const createStyles = (colors: any) => StyleSheet.create({
     fontWeight: '500',
   },
   themeOptionTextActive: {
-    color: colors.primary,
-    fontWeight: '600',
-  },
-  databaseRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: 16,
-  },
-  databaseRowBorder: {
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-  },
-  databaseRowSelected: {
-    backgroundColor: colors.primary + '15',
-  },
-  databaseName: {
-    fontSize: 16,
-    color: colors.text,
-  },
-  databaseNameSelected: {
-    color: colors.primary,
-    fontWeight: '600',
-  },
-  checkmark: {
-    fontSize: 16,
     color: colors.primary,
     fontWeight: '600',
   },

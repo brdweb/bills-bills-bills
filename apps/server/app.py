@@ -320,8 +320,29 @@ def check_tier_limit(user, feature: str) -> tuple[bool, dict]:
         else:
             used = len(user.accessible_databases)
     elif feature == 'users':
-        # For now, just return limit (user management is admin-level)
-        used = 1
+        # Count users who have access to databases owned by this user
+        # This includes the owner themselves plus any invited users
+        if is_saas():
+            # Get all databases owned by this user
+            owned_dbs = Database.query.filter_by(owner_id=user.id).all()
+            if owned_dbs:
+                # Get unique user IDs that have access to these databases
+                user_ids = set()
+                for owned_db in owned_dbs:
+                    for u in owned_db.users:
+                        user_ids.add(u.id)
+                used = len(user_ids)
+            else:
+                used = 1  # Just the owner
+
+            # Also count pending invitations for databases owned by this user
+            pending_invites = UserInvite.query.filter_by(invited_by_id=user.id).filter(
+                UserInvite.accepted_at == None,
+                UserInvite.expires_at > datetime.datetime.utcnow()
+            ).count()
+            used += pending_invites
+        else:
+            used = User.query.count()
     else:
         used = 0
 
@@ -2133,7 +2154,7 @@ def jwt_change_password():
 @jwt_admin_required
 def jwt_get_users():
     """Get all users (admin only)."""
-    user_id = request.user_id
+    user_id = g.jwt_user_id
     current_user = User.query.get(user_id)
     if is_saas():
         users = User.query.filter(
@@ -2146,12 +2167,86 @@ def jwt_get_users():
         'data': [{'id': u.id, 'username': u.username, 'role': u.role, 'email': u.email, 'created_at': u.created_at.isoformat() if hasattr(u, 'created_at') and u.created_at else None} for u in users]
     })
 
+@api_v2_bp.route('/users', methods=['POST'])
+@jwt_admin_required
+def jwt_create_user():
+    """Create a new user directly (admin only, primarily for self-hosted mode)."""
+    data = request.get_json()
+    username = data.get('username', '').strip()
+    password = data.get('password', '')
+    email = data.get('email', '').strip().lower() if data.get('email') else None
+    role = data.get('role', 'user')
+    database_ids = data.get('database_ids', [])
+
+    if not username:
+        return jsonify({'success': False, 'error': 'Username is required'}), 400
+    if not password:
+        return jsonify({'success': False, 'error': 'Password is required'}), 400
+    if len(password) < 8:
+        return jsonify({'success': False, 'error': 'Password must be at least 8 characters'}), 400
+    if role not in ['admin', 'user']:
+        return jsonify({'success': False, 'error': 'Invalid role'}), 400
+
+    # Check if username already exists
+    if User.query.filter_by(username=username).first():
+        return jsonify({'success': False, 'error': 'Username already taken'}), 400
+
+    # Check if email already exists (if provided)
+    if email and User.query.filter_by(email=email).first():
+        return jsonify({'success': False, 'error': 'Email already in use'}), 400
+
+    current_user_id = g.jwt_user_id
+    current_user = User.query.get(current_user_id)
+
+    # Check users limit (only enforced in SaaS mode)
+    allowed, info = check_tier_limit(current_user, 'users')
+    if not allowed:
+        return jsonify({
+            'success': False,
+            'error': f'You have reached your user limit ({info.get("limit")}). Upgrade your plan for more.',
+            'upgrade_required': True,
+            'limit_info': info
+        }), 403
+
+    # Create the new user
+    new_user = User(
+        username=username,
+        role=role,
+        email=email,
+        password_change_required=True
+    )
+    if is_saas():
+        new_user.created_by_id = current_user_id
+    new_user.set_password(password)
+
+    # Grant database access
+    for db_id in database_ids:
+        d = Database.query.get(db_id)
+        if d:
+            # In SaaS mode, only allow assigning access to databases you own
+            if is_saas() and d.owner_id != current_user_id:
+                continue
+            new_user.accessible_databases.append(d)
+
+    db.session.add(new_user)
+    db.session.commit()
+
+    return jsonify({
+        'success': True,
+        'data': {
+            'id': new_user.id,
+            'username': new_user.username,
+            'role': new_user.role,
+            'email': new_user.email
+        }
+    }), 201
+
 @api_v2_bp.route('/users/<int:target_user_id>', methods=['PUT'])
 @jwt_admin_required
 def jwt_update_user(target_user_id):
     """Update user role (admin only)."""
     user = User.query.get_or_404(target_user_id)
-    current_user_id = request.user_id
+    current_user_id = g.jwt_user_id
     if is_saas() and user.id != current_user_id:
         if user.created_by_id is not None and user.created_by_id != current_user_id:
             return jsonify({'success': False, 'error': 'Access denied'}), 403
@@ -2172,11 +2267,11 @@ def jwt_update_user(target_user_id):
 @jwt_admin_required
 def jwt_delete_user(target_user_id):
     """Delete a user (admin only)."""
-    if target_user_id == request.user_id:
+    if target_user_id == g.jwt_user_id:
         return jsonify({'success': False, 'error': 'Cannot delete yourself'}), 400
     user = User.query.get_or_404(target_user_id)
     if is_saas():
-        current_user_id = request.user_id
+        current_user_id = g.jwt_user_id
         current_user = User.query.get(current_user_id)
         if current_user.is_account_owner:
             pass
@@ -2190,7 +2285,7 @@ def jwt_delete_user(target_user_id):
 @jwt_admin_required
 def jwt_get_invitations():
     """Get pending invitations (admin only)."""
-    current_user_id = request.user_id
+    current_user_id = g.jwt_user_id
     invites = UserInvite.query.filter_by(invited_by_id=current_user_id, accepted_at=None).filter(
         UserInvite.expires_at > datetime.datetime.utcnow()
     ).all()
@@ -2232,8 +2327,18 @@ def jwt_create_invitation():
     if pending_invite:
         return jsonify({'success': False, 'error': 'An invitation has already been sent to this email'}), 400
 
-    current_user_id = request.user_id
+    current_user_id = g.jwt_user_id
     current_user = User.query.get(current_user_id)
+
+    # Check users limit (only enforced in SaaS mode)
+    allowed, info = check_tier_limit(current_user, 'users')
+    if not allowed:
+        return jsonify({
+            'success': False,
+            'error': f'You have reached your user limit ({info.get("limit")}). Upgrade your plan for more.',
+            'upgrade_required': True,
+            'limit_info': info
+        }), 403
 
     if is_saas():
         for db_id in database_ids:
@@ -2266,7 +2371,7 @@ def jwt_create_invitation():
 @jwt_admin_required
 def jwt_delete_invitation(invite_id):
     """Cancel a pending invitation (admin only)."""
-    current_user_id = request.user_id
+    current_user_id = g.jwt_user_id
     invite = UserInvite.query.get_or_404(invite_id)
     if invite.invited_by_id != current_user_id:
         return jsonify({'success': False, 'error': 'Access denied'}), 403
@@ -2280,7 +2385,7 @@ def jwt_delete_invitation(invite_id):
 @jwt_admin_required
 def jwt_resend_invitation(invite_id):
     """Resend an invitation email (admin only)."""
-    current_user_id = request.user_id
+    current_user_id = g.jwt_user_id
     invite = UserInvite.query.get_or_404(invite_id)
     if invite.invited_by_id != current_user_id:
         return jsonify({'success': False, 'error': 'Access denied'}), 403
@@ -2296,7 +2401,7 @@ def jwt_resend_invitation(invite_id):
 @jwt_admin_required
 def jwt_get_databases():
     """Get all databases with access info (admin only)."""
-    current_user_id = request.user_id
+    current_user_id = g.jwt_user_id
     current_user = User.query.get(current_user_id)
 
     if is_saas():
@@ -2332,8 +2437,18 @@ def jwt_create_database():
     if Database.query.filter_by(name=name).first():
         return jsonify({'success': False, 'error': 'A database with this name already exists'}), 400
 
-    current_user_id = request.user_id
+    current_user_id = g.jwt_user_id
     current_user = User.query.get(current_user_id)
+
+    # Check bill_groups limit (only enforced in SaaS mode)
+    allowed, info = check_tier_limit(current_user, 'bill_groups')
+    if not allowed:
+        return jsonify({
+            'success': False,
+            'error': f'You have reached your bill group limit ({info.get("limit")}). Upgrade your plan for more.',
+            'upgrade_required': True,
+            'limit_info': info
+        }), 403
 
     new_db = Database(name=name, display_name=display_name)
     if is_saas():
@@ -2350,7 +2465,7 @@ def jwt_create_database():
 def jwt_update_database(database_id):
     """Update a database/bill group (admin only)."""
     database = Database.query.get_or_404(database_id)
-    current_user_id = request.user_id
+    current_user_id = g.jwt_user_id
 
     if is_saas() and database.owner_id != current_user_id:
         return jsonify({'success': False, 'error': 'Access denied'}), 403
@@ -2367,7 +2482,7 @@ def jwt_update_database(database_id):
 def jwt_delete_database(database_id):
     """Delete a database/bill group (admin only)."""
     database = Database.query.get_or_404(database_id)
-    current_user_id = request.user_id
+    current_user_id = g.jwt_user_id
 
     if is_saas() and database.owner_id != current_user_id:
         return jsonify({'success': False, 'error': 'Access denied'}), 403
@@ -2381,7 +2496,7 @@ def jwt_delete_database(database_id):
 def jwt_add_database_access(database_id):
     """Grant user access to a database (admin only)."""
     database = Database.query.get_or_404(database_id)
-    current_user_id = request.user_id
+    current_user_id = g.jwt_user_id
 
     if is_saas() and database.owner_id != current_user_id:
         return jsonify({'success': False, 'error': 'Access denied'}), 403
@@ -2405,7 +2520,7 @@ def jwt_add_database_access(database_id):
 def jwt_remove_database_access(database_id, target_user_id):
     """Revoke user access from a database (admin only)."""
     database = Database.query.get_or_404(database_id)
-    current_user_id = request.user_id
+    current_user_id = g.jwt_user_id
 
     if is_saas() and database.owner_id != current_user_id:
         return jsonify({'success': False, 'error': 'Access denied'}), 403

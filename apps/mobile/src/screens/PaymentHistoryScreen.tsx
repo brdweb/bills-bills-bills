@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -6,9 +6,14 @@ import {
   TouchableOpacity,
   StyleSheet,
   ActivityIndicator,
-  Alert,
   RefreshControl,
+  Animated,
+  Modal,
+  Pressable,
+  TextInput,
+  Alert,
 } from 'react-native';
+import { Swipeable } from 'react-native-gesture-handler';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useFocusEffect } from '@react-navigation/native';
 import { api } from '../api/client';
@@ -30,6 +35,13 @@ export default function PaymentHistoryScreen({ navigation }: Props) {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState<'all' | 'expense' | 'deposit'>('all');
+  const [deleteConfirmModal, setDeleteConfirmModal] = useState<PaymentWithBill | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [editModal, setEditModal] = useState<PaymentWithBill | null>(null);
+  const [editAmount, setEditAmount] = useState('');
+  const [editNotes, setEditNotes] = useState('');
+  const [isEditing, setIsEditing] = useState(false);
+  const swipeableRefs = useRef<Map<number, Swipeable>>(new Map());
 
   const fetchData = useCallback(async () => {
     try {
@@ -86,25 +98,82 @@ export default function PaymentHistoryScreen({ navigation }: Props) {
     fetchData();
   }, [fetchData]);
 
-  const handleDeletePayment = (payment: PaymentWithBill) => {
-    Alert.alert(
-      'Delete Payment',
-      `Delete this ${formatCurrency(payment.amount)} payment for "${payment.bill_name}"?`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: async () => {
-            const result = await api.deletePayment(payment.id);
-            if (result.success) {
-              fetchData();
-            } else {
-              Alert.alert('Error', result.error || 'Failed to delete payment');
-            }
-          },
-        },
-      ]
+  const handleSwipeDelete = (payment: PaymentWithBill) => {
+    // Close the swipeable and show confirmation modal
+    const ref = swipeableRefs.current.get(payment.id);
+    ref?.close();
+    setDeleteConfirmModal(payment);
+  };
+
+  const confirmDelete = async () => {
+    if (!deleteConfirmModal) return;
+
+    setIsDeleting(true);
+    const result = await api.deletePayment(deleteConfirmModal.id);
+    setIsDeleting(false);
+
+    if (result.success) {
+      setDeleteConfirmModal(null);
+      fetchData();
+    } else {
+      // Show error in the modal - we'll handle this inline
+      setDeleteConfirmModal(null);
+    }
+  };
+
+  const renderRightActions = (payment: PaymentWithBill) => {
+    return (
+      <TouchableOpacity
+        style={[styles.deleteAction, { backgroundColor: colors.danger }]}
+        onPress={() => handleSwipeDelete(payment)}
+      >
+        <Text style={styles.deleteActionText}>Delete</Text>
+      </TouchableOpacity>
+    );
+  };
+
+  const handleSwipeEdit = (payment: PaymentWithBill) => {
+    const ref = swipeableRefs.current.get(payment.id);
+    ref?.close();
+    setEditAmount(payment.amount.toString());
+    setEditNotes(payment.notes || '');
+    setEditModal(payment);
+  };
+
+  const confirmEdit = async () => {
+    if (!editModal) return;
+
+    const amount = parseFloat(editAmount);
+    if (isNaN(amount) || amount <= 0) {
+      Alert.alert('Invalid Amount', 'Please enter a valid payment amount');
+      return;
+    }
+
+    setIsEditing(true);
+    const result = await api.updatePayment(
+      editModal.id,
+      amount,
+      editModal.payment_date,
+      editNotes.trim() || undefined
+    );
+    setIsEditing(false);
+
+    if (result.success) {
+      setEditModal(null);
+      fetchData();
+    } else {
+      Alert.alert('Error', result.error || 'Failed to update payment');
+    }
+  };
+
+  const renderLeftActions = (payment: PaymentWithBill) => {
+    return (
+      <TouchableOpacity
+        style={[styles.editAction, { backgroundColor: colors.primary }]}
+        onPress={() => handleSwipeEdit(payment)}
+      >
+        <Text style={styles.editActionText}>Edit</Text>
+      </TouchableOpacity>
     );
   };
 
@@ -155,29 +224,39 @@ export default function PaymentHistoryScreen({ navigation }: Props) {
     const isDeposit = item.bill_type === 'deposit';
 
     return (
-      <TouchableOpacity
-        style={[styles.paymentCard, { backgroundColor: colors.surface }]}
-        onLongPress={() => handleDeletePayment(item)}
-        delayLongPress={500}
+      <Swipeable
+        ref={(ref) => {
+          if (ref) {
+            swipeableRefs.current.set(item.id, ref);
+          }
+        }}
+        renderRightActions={() => renderRightActions(item)}
+        renderLeftActions={() => renderLeftActions(item)}
+        rightThreshold={40}
+        leftThreshold={40}
+        overshootRight={false}
+        overshootLeft={false}
       >
-        <View style={styles.paymentInfo}>
-          <Text style={[styles.billName, { color: colors.text }]}>{item.bill_name}</Text>
-          <Text style={[styles.paymentDate, { color: colors.textMuted }]}>
-            {formatDate(item.payment_date)}
-          </Text>
-          {item.notes && (
-            <Text style={[styles.paymentNotes, { color: colors.textMuted }]} numberOfLines={1}>
-              {item.notes}
+        <View style={[styles.paymentCard, { backgroundColor: colors.surface }]}>
+          <View style={styles.paymentInfo}>
+            <Text style={[styles.billName, { color: colors.text }]}>{item.bill_name}</Text>
+            <Text style={[styles.paymentDate, { color: colors.textMuted }]}>
+              {formatDate(item.payment_date)}
             </Text>
-          )}
+            {item.notes && (
+              <Text style={[styles.paymentNotes, { color: colors.textMuted }]} numberOfLines={1}>
+                {item.notes}
+              </Text>
+            )}
+          </View>
+          <Text style={[
+            styles.paymentAmount,
+            { color: isDeposit ? colors.success : colors.danger }
+          ]}>
+            {isDeposit ? '+' : '-'}{formatCurrency(item.amount)}
+          </Text>
         </View>
-        <Text style={[
-          styles.paymentAmount,
-          { color: isDeposit ? colors.success : colors.danger }
-        ]}>
-          {isDeposit ? '+' : '-'}{formatCurrency(item.amount)}
-        </Text>
-      </TouchableOpacity>
+      </Swipeable>
     );
   };
 
@@ -309,11 +388,113 @@ export default function PaymentHistoryScreen({ navigation }: Props) {
           }
           ListFooterComponent={
             <Text style={[styles.hint, { color: colors.textMuted }]}>
-              Long-press a payment to delete it
+              Swipe left to delete • Swipe right to edit
             </Text>
           }
         />
       )}
+
+      {/* Delete Confirmation Modal */}
+      <Modal
+        visible={deleteConfirmModal !== null}
+        animationType="fade"
+        transparent={true}
+        onRequestClose={() => setDeleteConfirmModal(null)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalContent, { backgroundColor: colors.surface }]}>
+            <Text style={[styles.modalTitle, { color: colors.text }]}>Delete Payment?</Text>
+            <Text style={[styles.modalMessage, { color: colors.textMuted }]}>
+              This will permanently delete the {deleteConfirmModal && formatCurrency(deleteConfirmModal.amount)} payment for "{deleteConfirmModal?.bill_name}".
+            </Text>
+            <View style={styles.modalButtons}>
+              <Pressable
+                style={[styles.modalButton, styles.cancelButton, { backgroundColor: colors.border }]}
+                onPress={() => setDeleteConfirmModal(null)}
+                disabled={isDeleting}
+              >
+                <Text style={[styles.modalButtonText, { color: colors.text }]}>Cancel</Text>
+              </Pressable>
+              <Pressable
+                style={[styles.modalButton, styles.deleteButton, { backgroundColor: colors.danger }]}
+                onPress={confirmDelete}
+                disabled={isDeleting}
+              >
+                {isDeleting ? (
+                  <ActivityIndicator color="#fff" size="small" />
+                ) : (
+                  <Text style={[styles.modalButtonText, { color: '#fff' }]}>Delete</Text>
+                )}
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Edit Payment Modal */}
+      <Modal
+        visible={editModal !== null}
+        animationType="fade"
+        transparent={true}
+        onRequestClose={() => setEditModal(null)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalContent, { backgroundColor: colors.surface }]}>
+            <Text style={[styles.modalTitle, { color: colors.text }]}>Edit Payment</Text>
+            <Text style={[styles.modalSubtitle, { color: colors.textMuted }]}>
+              {editModal?.bill_name} • {editModal && formatDate(editModal.payment_date)}
+            </Text>
+
+            <View style={styles.inputGroup}>
+              <Text style={[styles.inputLabel, { color: colors.textMuted }]}>Amount</Text>
+              <TextInput
+                style={[styles.input, { backgroundColor: colors.background, borderColor: colors.border, color: colors.text }]}
+                value={editAmount}
+                onChangeText={setEditAmount}
+                placeholder="0.00"
+                placeholderTextColor={colors.textMuted}
+                keyboardType="decimal-pad"
+                editable={!isEditing}
+              />
+            </View>
+
+            <View style={styles.inputGroup}>
+              <Text style={[styles.inputLabel, { color: colors.textMuted }]}>Notes (optional)</Text>
+              <TextInput
+                style={[styles.input, styles.notesInput, { backgroundColor: colors.background, borderColor: colors.border, color: colors.text }]}
+                value={editNotes}
+                onChangeText={setEditNotes}
+                placeholder="Add notes..."
+                placeholderTextColor={colors.textMuted}
+                multiline
+                numberOfLines={3}
+                editable={!isEditing}
+              />
+            </View>
+
+            <View style={styles.modalButtons}>
+              <Pressable
+                style={[styles.modalButton, styles.cancelButton, { backgroundColor: colors.border }]}
+                onPress={() => setEditModal(null)}
+                disabled={isEditing}
+              >
+                <Text style={[styles.modalButtonText, { color: colors.text }]}>Cancel</Text>
+              </Pressable>
+              <Pressable
+                style={[styles.modalButton, { backgroundColor: colors.primary }]}
+                onPress={confirmEdit}
+                disabled={isEditing}
+              >
+                {isEditing ? (
+                  <ActivityIndicator color="#fff" size="small" />
+                ) : (
+                  <Text style={[styles.modalButtonText, { color: '#fff' }]}>Save</Text>
+                )}
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -446,5 +627,95 @@ const styles = StyleSheet.create({
     fontSize: 12,
     textAlign: 'center',
     marginTop: 16,
+  },
+  deleteAction: {
+    justifyContent: 'center',
+    alignItems: 'center',
+    width: 80,
+    marginBottom: 8,
+    borderTopRightRadius: 10,
+    borderBottomRightRadius: 10,
+  },
+  deleteActionText: {
+    color: '#fff',
+    fontWeight: '600',
+    fontSize: 14,
+  },
+  editAction: {
+    justifyContent: 'center',
+    alignItems: 'center',
+    width: 80,
+    marginBottom: 8,
+    borderTopLeftRadius: 10,
+    borderBottomLeftRadius: 10,
+  },
+  editActionText: {
+    color: '#fff',
+    fontWeight: '600',
+    fontSize: 14,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+  },
+  modalContent: {
+    width: '100%',
+    borderRadius: 16,
+    padding: 24,
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    textAlign: 'center',
+    marginBottom: 12,
+  },
+  modalMessage: {
+    fontSize: 15,
+    textAlign: 'center',
+    marginBottom: 24,
+    lineHeight: 22,
+  },
+  modalButtons: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  modalButton: {
+    flex: 1,
+    paddingVertical: 14,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  cancelButton: {},
+  deleteButton: {},
+  modalButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  modalSubtitle: {
+    fontSize: 14,
+    textAlign: 'center',
+    marginBottom: 20,
+  },
+  inputGroup: {
+    marginBottom: 16,
+  },
+  inputLabel: {
+    fontSize: 14,
+    marginBottom: 8,
+  },
+  input: {
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    fontSize: 16,
+  },
+  notesInput: {
+    minHeight: 80,
+    textAlignVertical: 'top',
   },
 });

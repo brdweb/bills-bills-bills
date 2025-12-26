@@ -1,19 +1,19 @@
 import React, { useState, useEffect } from 'react';
-import { Alert, KeyboardAvoidingView, Platform } from 'react-native';
+import {
+  View,
+  Text,
+  ScrollView,
+  TouchableOpacity,
+  TextInput,
+  Switch,
+  StyleSheet,
+  ActivityIndicator,
+  KeyboardAvoidingView,
+  Platform,
+  Alert,
+} from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
-import {
-  YStack,
-  XStack,
-  Text,
-  Button,
-  Input,
-  Switch,
-  Spinner,
-  ScrollView,
-  TextArea,
-  styled,
-} from 'tamagui';
 import { api } from '../api/client';
 import { useTheme } from '../context/ThemeContext';
 import { Bill } from '../types';
@@ -29,184 +29,10 @@ const FREQUENCY_OPTIONS = [
   { label: 'One-time', value: 'once' },
 ];
 
-// Styled components
-const Container = styled(YStack, {
-  flex: 1,
-  backgroundColor: '$background',
-});
-
-const Header = styled(XStack, {
-  alignItems: 'center',
-  justifyContent: 'space-between',
-  padding: '$5',
-  paddingTop: 60,
-  backgroundColor: '$surface',
-});
-
-const HeaderTitle = styled(Text, {
-  fontSize: 18,
-  fontWeight: '600',
-  color: '$text',
-});
-
-const Label = styled(Text, {
-  fontSize: 14,
-  color: '$textMuted',
-  marginBottom: '$2',
-  marginTop: '$4',
-});
-
-const StyledInput = styled(Input, {
-  backgroundColor: '$surface',
-  borderColor: '$border',
-  borderWidth: 1,
-  borderRadius: '$2',
-  padding: '$4',
-  fontSize: 16,
-  color: '$text',
-});
-
-const StyledTextArea = styled(TextArea, {
-  backgroundColor: '$surface',
-  borderColor: '$border',
-  borderWidth: 1,
-  borderRadius: '$2',
-  padding: '$4',
-  fontSize: 16,
-  color: '$text',
-  minHeight: 80,
-});
-
-const SelectButton = styled(Button, {
-  paddingHorizontal: '$4',
-  paddingVertical: '$2',
-  borderRadius: '$2',
-  borderWidth: 1,
-  borderColor: '$border',
-  backgroundColor: '$surface',
-
-  variants: {
-    active: {
-      true: {
-        backgroundColor: '$primary',
-        borderColor: '$primary',
-      },
-    },
-  } as const,
-});
-
-const TypeButton = styled(Button, {
-  flex: 1,
-  paddingVertical: '$3',
-  borderRadius: '$2',
-  borderWidth: 2,
-  borderColor: '$border',
-  backgroundColor: '$surface',
-
-  variants: {
-    type: {
-      expense: {},
-      deposit: {},
-    },
-    active: {
-      true: {},
-      false: {},
-    },
-  } as const,
-});
-
-const DateButton = styled(Button, {
-  backgroundColor: '$surface',
-  borderColor: '$border',
-  borderWidth: 1,
-  borderRadius: '$2',
-  padding: '$4',
-  justifyContent: 'flex-start',
-});
-
-const AccountChip = styled(Button, {
-  paddingHorizontal: '$3',
-  paddingVertical: '$1',
-  borderRadius: 16,
-  backgroundColor: '$border',
-  marginRight: '$2',
-});
-
-// Type Toggle Component
-function TypeToggle({
-  value,
-  onChange
-}: {
-  value: 'expense' | 'deposit';
-  onChange: (v: 'expense' | 'deposit') => void;
-}) {
-  return (
-    <XStack gap="$3">
-      <TypeButton
-        onPress={() => onChange('expense')}
-        backgroundColor={value === 'expense' ? '$danger' : '$surface'}
-        borderColor={value === 'expense' ? '$danger' : '$border'}
-      >
-        <Text
-          color={value === 'expense' ? 'white' : '$textMuted'}
-          fontSize={16}
-          fontWeight={value === 'expense' ? '600' : '500'}
-        >
-          Expense
-        </Text>
-      </TypeButton>
-      <TypeButton
-        onPress={() => onChange('deposit')}
-        backgroundColor={value === 'deposit' ? '$success' : '$surface'}
-        borderColor={value === 'deposit' ? '$success' : '$border'}
-      >
-        <Text
-          color={value === 'deposit' ? 'white' : '$textMuted'}
-          fontSize={16}
-          fontWeight={value === 'deposit' ? '600' : '500'}
-        >
-          Income
-        </Text>
-      </TypeButton>
-    </XStack>
-  );
-}
-
-// Select Buttons Component
-function SelectButtons({
-  options,
-  value,
-  onChange
-}: {
-  options: { label: string; value: string }[];
-  value: string;
-  onChange: (value: string) => void;
-}) {
-  return (
-    <XStack flexWrap="wrap" gap="$2">
-      {options.map((option) => (
-        <SelectButton
-          key={option.value}
-          active={value === option.value}
-          onPress={() => onChange(option.value)}
-        >
-          <Text
-            color={value === option.value ? 'white' : '$textMuted'}
-            fontSize={14}
-            fontWeight={value === option.value ? '600' : '400'}
-          >
-            {option.label}
-          </Text>
-        </SelectButton>
-      ))}
-    </XStack>
-  );
-}
-
 export default function AddBillScreen({ navigation, route }: Props) {
   const editBill = route.params?.bill as Bill | undefined;
   const isEditing = !!editBill;
-  const { isDark } = useTheme();
+  const { colors, isDark } = useTheme();
 
   const [name, setName] = useState(editBill?.name || '');
   const [amount, setAmount] = useState(editBill?.amount?.toString() || '');
@@ -226,6 +52,8 @@ export default function AddBillScreen({ navigation, route }: Props) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [accounts, setAccounts] = useState<string[]>([]);
 
+  const styles = createStyles(colors);
+
   useEffect(() => {
     loadAccounts();
   }, []);
@@ -234,11 +62,13 @@ export default function AddBillScreen({ navigation, route }: Props) {
     try {
       const response = await api.getBills();
       if (response.success && response.data) {
-        const uniqueAccounts = [...new Set(
-          response.data
-            .map(b => b.account)
-            .filter((a): a is string => !!a)
-        )];
+        const uniqueAccounts = [
+          ...new Set(
+            response.data
+              .map((b) => b.account)
+              .filter((a): a is string => !!a)
+          ),
+        ];
         setAccounts(uniqueAccounts);
       }
     } catch (err) {
@@ -313,149 +143,358 @@ export default function AddBillScreen({ navigation, route }: Props) {
 
   return (
     <KeyboardAvoidingView
-      style={{ flex: 1 }}
+      style={styles.container}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
-      <Container>
-        <Header>
-          <Button unstyled padding="$1" onPress={() => navigation.goBack()}>
-            <Text color="$textMuted" fontSize={16}>Cancel</Text>
-          </Button>
-          <HeaderTitle>{isEditing ? 'Edit Bill' : 'New Bill'}</HeaderTitle>
-          <Button
-            unstyled
-            padding="$1"
-            onPress={handleSubmit}
-            disabled={isSubmitting}
+      {/* Header */}
+      <View style={styles.header}>
+        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.headerButton}>
+          <Text style={styles.cancelText}>Cancel</Text>
+        </TouchableOpacity>
+        <Text style={styles.headerTitle}>{isEditing ? 'Edit Bill' : 'New Bill'}</Text>
+        <TouchableOpacity onPress={handleSubmit} disabled={isSubmitting} style={styles.headerButton}>
+          {isSubmitting ? (
+            <ActivityIndicator size="small" color={colors.primary} />
+          ) : (
+            <Text style={styles.saveText}>Save</Text>
+          )}
+        </TouchableOpacity>
+      </View>
+
+      <ScrollView style={styles.scrollView} keyboardShouldPersistTaps="handled">
+        {/* Type Toggle */}
+        <Text style={styles.label}>Type</Text>
+        <View style={styles.typeToggle}>
+          <TouchableOpacity
+            style={[
+              styles.typeButton,
+              type === 'expense' && styles.typeButtonExpenseActive,
+            ]}
+            onPress={() => setType('expense')}
           >
-            {isSubmitting ? (
-              <Spinner color="$primary" size="small" />
-            ) : (
-              <Text color="$primary" fontSize={16} fontWeight="600">Save</Text>
-            )}
-          </Button>
-        </Header>
+            <Text style={[
+              styles.typeButtonText,
+              type === 'expense' && styles.typeButtonTextActive,
+            ]}>Expense</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[
+              styles.typeButton,
+              type === 'deposit' && styles.typeButtonDepositActive,
+            ]}
+            onPress={() => setType('deposit')}
+          >
+            <Text style={[
+              styles.typeButtonText,
+              type === 'deposit' && styles.typeButtonTextActive,
+            ]}>Income</Text>
+          </TouchableOpacity>
+        </View>
 
-        <ScrollView flex={1} padding="$4" keyboardShouldPersistTaps="handled">
-          {/* Type */}
-          <Label>Type</Label>
-          <TypeToggle value={type} onChange={setType} />
+        {/* Name */}
+        <Text style={styles.label}>Name</Text>
+        <TextInput
+          style={styles.input}
+          value={name}
+          onChangeText={setName}
+          placeholder="e.g., Electric Bill"
+          placeholderTextColor={colors.textMuted}
+        />
 
-          {/* Name */}
-          <Label>Name</Label>
-          <StyledInput
-            value={name}
-            onChangeText={setName}
-            placeholder="e.g., Electric Bill"
-            placeholderTextColor="$textMuted"
-          />
-
-          {/* Amount */}
-          <XStack gap="$4">
-            <YStack flex={1}>
-              <Label>Amount</Label>
-              <StyledInput
-                value={amount}
-                onChangeText={setAmount}
-                keyboardType="decimal-pad"
-                placeholder="0.00"
-                placeholderTextColor="$textMuted"
-                editable={!varies}
-                opacity={varies ? 0.5 : 1}
-              />
-            </YStack>
-            <YStack alignItems="center" justifyContent="flex-end" paddingBottom="$2">
-              <Label>Variable</Label>
-              <Switch
-                checked={varies}
-                onCheckedChange={setVaries}
-                backgroundColor={varies ? '$primary' : '$border'}
-              >
-                <Switch.Thumb animation="quick" backgroundColor="white" />
-              </Switch>
-            </YStack>
-          </XStack>
-
-          {/* Frequency */}
-          <Label>Frequency</Label>
-          <SelectButtons
-            options={FREQUENCY_OPTIONS}
-            value={frequency}
-            onChange={setFrequency}
-          />
-
-          {/* Next Due Date */}
-          <Label>Next Due Date</Label>
-          <DateButton onPress={() => setShowDatePicker(true)}>
-            <Text color="$text" fontSize={16}>{formatDateForDisplay(nextDue)}</Text>
-          </DateButton>
-
-          {showDatePicker && (
-            <DateTimePicker
-              value={nextDue}
-              mode="date"
-              display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-              onChange={handleDateChange}
-              themeVariant={isDark ? 'dark' : 'light'}
+        {/* Amount */}
+        <View style={styles.amountRow}>
+          <View style={styles.amountInputContainer}>
+            <Text style={styles.label}>Amount</Text>
+            <TextInput
+              style={[styles.input, varies && styles.inputDisabled]}
+              value={amount}
+              onChangeText={setAmount}
+              keyboardType="decimal-pad"
+              placeholder="0.00"
+              placeholderTextColor={colors.textMuted}
+              editable={!varies}
             />
-          )}
-
-          {Platform.OS === 'ios' && showDatePicker && (
-            <Button
-              unstyled
-              alignSelf="flex-end"
-              paddingVertical="$2"
-              onPress={() => setShowDatePicker(false)}
-            >
-              <Text color="$primary" fontSize={16} fontWeight="600">Done</Text>
-            </Button>
-          )}
-
-          {/* Account */}
-          <Label>Account (optional)</Label>
-          <StyledInput
-            value={account}
-            onChangeText={setAccount}
-            placeholder="e.g., Chase Checking"
-            placeholderTextColor="$textMuted"
-          />
-          {accounts.length > 0 && (
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} marginTop="$2">
-              <XStack>
-                {accounts.map((acc) => (
-                  <AccountChip key={acc} onPress={() => setAccount(acc)}>
-                    <Text color="$textMuted" fontSize={12}>{acc}</Text>
-                  </AccountChip>
-                ))}
-              </XStack>
-            </ScrollView>
-          )}
-
-          {/* Auto-payment */}
-          <XStack justifyContent="space-between" alignItems="center" marginTop="$4" paddingVertical="$2">
-            <Text fontSize={14} color="$textMuted">Auto-payment enabled</Text>
+          </View>
+          <View style={styles.variableContainer}>
+            <Text style={styles.label}>Variable</Text>
             <Switch
-              checked={autoPayment}
-              onCheckedChange={setAutoPayment}
-              backgroundColor={autoPayment ? '$primary' : '$border'}
+              value={varies}
+              onValueChange={setVaries}
+              trackColor={{ false: colors.border, true: colors.primary }}
+              thumbColor="#fff"
+            />
+          </View>
+        </View>
+
+        {/* Frequency */}
+        <Text style={styles.label}>Frequency</Text>
+        <View style={styles.frequencyContainer}>
+          {FREQUENCY_OPTIONS.map((option) => (
+            <TouchableOpacity
+              key={option.value}
+              style={[
+                styles.frequencyButton,
+                frequency === option.value && styles.frequencyButtonActive,
+              ]}
+              onPress={() => setFrequency(option.value)}
             >
-              <Switch.Thumb animation="quick" backgroundColor="white" />
-            </Switch>
-          </XStack>
+              <Text style={[
+                styles.frequencyButtonText,
+                frequency === option.value && styles.frequencyButtonTextActive,
+              ]}>{option.label}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
 
-          {/* Notes */}
-          <Label>Notes (optional)</Label>
-          <StyledTextArea
-            value={notes}
-            onChangeText={setNotes}
-            placeholder="Any additional notes..."
-            placeholderTextColor="$textMuted"
-            numberOfLines={3}
+        {/* Next Due Date */}
+        <Text style={styles.label}>Next Due Date</Text>
+        <TouchableOpacity
+          style={styles.dateButton}
+          onPress={() => setShowDatePicker(true)}
+        >
+          <Text style={styles.dateButtonText}>{formatDateForDisplay(nextDue)}</Text>
+        </TouchableOpacity>
+
+        {showDatePicker && (
+          <DateTimePicker
+            value={nextDue}
+            mode="date"
+            display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+            onChange={handleDateChange}
+            themeVariant={isDark ? 'dark' : 'light'}
           />
+        )}
 
-          <YStack height={40} />
-        </ScrollView>
-      </Container>
+        {Platform.OS === 'ios' && showDatePicker && (
+          <TouchableOpacity
+            style={styles.doneButton}
+            onPress={() => setShowDatePicker(false)}
+          >
+            <Text style={styles.doneButtonText}>Done</Text>
+          </TouchableOpacity>
+        )}
+
+        {/* Account */}
+        <Text style={styles.label}>Account (optional)</Text>
+        <TextInput
+          style={styles.input}
+          value={account}
+          onChangeText={setAccount}
+          placeholder="e.g., Chase Checking"
+          placeholderTextColor={colors.textMuted}
+        />
+        {accounts.length > 0 && (
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.accountSuggestions}>
+            {accounts.map((acc) => (
+              <TouchableOpacity
+                key={acc}
+                style={styles.accountChip}
+                onPress={() => setAccount(acc)}
+              >
+                <Text style={styles.accountChipText}>{acc}</Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        )}
+
+        {/* Auto-payment */}
+        <View style={styles.switchRow}>
+          <Text style={styles.switchLabel}>Auto-payment enabled</Text>
+          <Switch
+            value={autoPayment}
+            onValueChange={setAutoPayment}
+            trackColor={{ false: colors.border, true: colors.primary }}
+            thumbColor="#fff"
+          />
+        </View>
+
+        {/* Notes */}
+        <Text style={styles.label}>Notes (optional)</Text>
+        <TextInput
+          style={[styles.input, styles.notesInput]}
+          value={notes}
+          onChangeText={setNotes}
+          placeholder="Any additional notes..."
+          placeholderTextColor={colors.textMuted}
+          multiline
+          numberOfLines={3}
+          textAlignVertical="top"
+        />
+
+        <View style={{ height: 40 }} />
+      </ScrollView>
     </KeyboardAvoidingView>
   );
 }
+
+const createStyles = (colors: any) => StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: colors.background,
+  },
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingTop: 60,
+    paddingBottom: 16,
+    backgroundColor: colors.surface,
+  },
+  headerButton: {
+    padding: 4,
+    minWidth: 60,
+  },
+  cancelText: {
+    color: colors.textMuted,
+    fontSize: 16,
+  },
+  headerTitle: {
+    fontSize: 17,
+    fontWeight: '600',
+    color: colors.text,
+  },
+  saveText: {
+    color: colors.primary,
+    fontSize: 16,
+    fontWeight: '600',
+    textAlign: 'right',
+  },
+  scrollView: {
+    flex: 1,
+    padding: 16,
+  },
+  label: {
+    fontSize: 14,
+    color: colors.textMuted,
+    marginBottom: 8,
+    marginTop: 16,
+  },
+  input: {
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 10,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    fontSize: 16,
+    color: colors.text,
+  },
+  inputDisabled: {
+    opacity: 0.5,
+  },
+  notesInput: {
+    minHeight: 80,
+    textAlignVertical: 'top',
+  },
+  typeToggle: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  typeButton: {
+    flex: 1,
+    paddingVertical: 14,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: colors.border,
+    alignItems: 'center',
+  },
+  typeButtonExpenseActive: {
+    backgroundColor: colors.danger,
+    borderColor: colors.danger,
+  },
+  typeButtonDepositActive: {
+    backgroundColor: colors.success,
+    borderColor: colors.success,
+  },
+  typeButtonText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: colors.text,
+  },
+  typeButtonTextActive: {
+    color: '#fff',
+  },
+  amountRow: {
+    flexDirection: 'row',
+    gap: 16,
+  },
+  amountInputContainer: {
+    flex: 1,
+  },
+  variableContainer: {
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    paddingBottom: 8,
+  },
+  frequencyContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  frequencyButton: {
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  frequencyButtonActive: {
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
+  },
+  frequencyButtonText: {
+    fontSize: 14,
+    color: colors.text,
+  },
+  frequencyButtonTextActive: {
+    color: '#fff',
+    fontWeight: '500',
+  },
+  dateButton: {
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 10,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+  },
+  dateButtonText: {
+    fontSize: 16,
+    color: colors.text,
+  },
+  doneButton: {
+    alignSelf: 'flex-end',
+    paddingVertical: 8,
+  },
+  doneButtonText: {
+    color: colors.primary,
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  accountSuggestions: {
+    marginTop: 8,
+  },
+  accountChip: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    backgroundColor: colors.border,
+    marginRight: 8,
+  },
+  accountChipText: {
+    fontSize: 13,
+    color: colors.textMuted,
+  },
+  switchRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 16,
+    paddingVertical: 8,
+  },
+  switchLabel: {
+    fontSize: 14,
+    color: colors.textMuted,
+  },
+});

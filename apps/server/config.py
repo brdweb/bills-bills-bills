@@ -100,6 +100,9 @@ ENABLE_REGISTRATION = os.environ.get(
     'true' if is_saas() else 'false'
 ).lower() == 'true'
 
+# Email: enabled when RESEND_API_KEY is configured
+EMAIL_ENABLED = bool(os.environ.get('RESEND_API_KEY'))
+
 
 def get_public_config():
     """Return configuration safe to expose to the frontend."""
@@ -107,6 +110,7 @@ def get_public_config():
         'deployment_mode': DEPLOYMENT_MODE,
         'billing_enabled': ENABLE_BILLING,
         'registration_enabled': ENABLE_REGISTRATION,
+        'email_enabled': EMAIL_ENABLED,
         'email_verification_required': REQUIRE_EMAIL_VERIFICATION,
         'tier_limits': TIER_LIMITS if is_saas() else None,
         'pricing': {

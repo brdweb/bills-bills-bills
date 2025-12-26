@@ -127,3 +127,32 @@ export interface DatabaseAccess {
 export interface DatabaseWithAccess extends DatabaseInfo {
   users?: DatabaseAccess[];
 }
+
+// Subscription types
+export interface SubscriptionStatus {
+  has_subscription: boolean;
+  status?: 'active' | 'canceled' | 'past_due' | 'trialing';
+  tier?: 'free' | 'basic' | 'plus';
+  effective_tier: 'free' | 'basic' | 'plus';
+  billing_interval?: 'monthly' | 'annual';
+  current_period_end?: string;
+  cancel_at_period_end?: boolean;
+  is_trialing?: boolean;
+  is_trial_expired?: boolean;
+  trial_days_remaining?: number;
+}
+
+export interface UsageItem {
+  used: number;
+  limit: number;
+  unlimited: boolean;
+}
+
+export interface BillingUsage {
+  tier: 'free' | 'basic' | 'plus';
+  usage: {
+    bills: UsageItem;
+    bill_groups: UsageItem;
+    family_members: UsageItem;
+  };
+}

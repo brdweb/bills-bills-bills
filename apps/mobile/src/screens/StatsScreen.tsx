@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -8,6 +8,7 @@ import {
   ActivityIndicator,
   RefreshControl,
   Dimensions,
+  FlatList,
 } from 'react-native';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -22,16 +23,20 @@ type SettingsStackParamList = {
 };
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
+const CARD_WIDTH = SCREEN_WIDTH - 32; // Full width minus padding
+const CARD_MARGIN = 8;
 
 export default function StatsScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<SettingsStackParamList>>();
   const { colors } = useTheme();
-  const { currentDatabase, databases } = useAuth();
+  const { user, currentDatabase, databases } = useAuth();
   const [monthlyStats, setMonthlyStats] = useState<MonthlyStats[]>([]);
   const [bills, setBills] = useState<Bill[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [currentIndex, setCurrentIndex] = useState(0);
+  const carouselRef = useRef<FlatList>(null);
 
   const fetchData = useCallback(async () => {
     if (!currentDatabase) {
@@ -41,25 +46,44 @@ export default function StatsScreen() {
     }
 
     try {
-      const [statsRes, billsRes] = await Promise.all([
-        api.getMonthlyStats(),
-        api.getBills(),
-      ]);
+      // Fetch stats and bills separately to handle errors better
+      let statsData: MonthlyStats[] = [];
+      let billsData: Bill[] = [];
 
-      if (statsRes.success && statsRes.data) {
-        // Sort by month descending (most recent first)
-        const sorted = [...statsRes.data].sort((a, b) => b.month.localeCompare(a.month));
-        setMonthlyStats(sorted);
-      } else if (!statsRes.success) {
-        console.log('Stats API error:', statsRes.error);
+      try {
+        const statsRes = await api.getMonthlyStats();
+        console.log('[StatsScreen] getMonthlyStats response:', JSON.stringify(statsRes, null, 2));
+        if (statsRes.success && statsRes.data) {
+          // Handle both array format and object format
+          let data = statsRes.data;
+          if (!Array.isArray(data)) {
+            // Convert object format { "2025-12": {...}, ... } to array format
+            data = Object.entries(data).map(([month, values]: [string, any]) => ({
+              month,
+              total_expenses: values.expenses || 0,
+              total_deposits: values.deposits || 0,
+              net: (values.deposits || 0) - (values.expenses || 0),
+            }));
+          }
+          // Sort by month descending (most recent first)
+          statsData = [...data].sort((a, b) => b.month.localeCompare(a.month));
+          console.log('[StatsScreen] Processed stats:', statsData);
+        }
+      } catch (statsErr) {
+        console.log('[StatsScreen] Stats API error:', statsErr);
       }
 
-      if (billsRes.success && billsRes.data) {
-        setBills(billsRes.data);
-      } else if (!billsRes.success) {
-        console.log('Bills API error:', billsRes.error);
+      try {
+        const billsRes = await api.getBills();
+        if (billsRes.success && Array.isArray(billsRes.data)) {
+          billsData = billsRes.data;
+        }
+      } catch (billsErr) {
+        console.log('Bills API error:', billsErr);
       }
 
+      setMonthlyStats(statsData);
+      setBills(billsData);
       setError(null);
     } catch (err) {
       console.log('Stats fetch error:', err);
@@ -96,10 +120,6 @@ export default function StatsScreen() {
   };
 
   const currentDbInfo = databases.find(db => db.name === currentDatabase);
-
-  // Calculate current month's summary
-  const currentMonth = new Date().toISOString().slice(0, 7);
-  const currentMonthStats = monthlyStats.find(s => s.month === currentMonth);
 
   // Calculate upcoming bills (due in next 30 days)
   const today = new Date();
@@ -148,7 +168,12 @@ export default function StatsScreen() {
       }
     >
       <View style={[styles.header, { backgroundColor: colors.surface }]}>
-        <Text style={[styles.headerTitle, { color: colors.text }]}>Statistics</Text>
+        <View style={styles.headerRow}>
+          <Text style={[styles.headerTitle, { color: colors.text }]}>Statistics</Text>
+          <Text style={[styles.usernameText, { color: colors.textMuted }]}>
+            {user?.username}
+          </Text>
+        </View>
         <Text style={[styles.headerSubtitle, { color: colors.textMuted }]}>
           {currentDbInfo?.display_name || 'Financial Overview'}
         </Text>
@@ -166,6 +191,24 @@ export default function StatsScreen() {
         </View>
       ) : (
         <>
+          {/* Payment History Quick Access - at the top */}
+          <View style={styles.sectionContainer}>
+            <TouchableOpacity
+              style={[styles.paymentHistoryButton, { backgroundColor: colors.surface, borderColor: colors.border }]}
+              onPress={() => navigation.navigate('PaymentHistory' as never)}
+            >
+              <View style={styles.paymentHistoryContent}>
+                <Text style={[styles.paymentHistoryTitle, { color: colors.text }]}>
+                  Payment History
+                </Text>
+                <Text style={[styles.paymentHistorySubtitle, { color: colors.textMuted }]}>
+                  View all recorded payments
+                </Text>
+              </View>
+              <Text style={[styles.paymentHistoryArrow, { color: colors.textMuted }]}>→</Text>
+            </TouchableOpacity>
+          </View>
+
           {/* Quick Summary Cards */}
           <View style={styles.summaryContainer}>
             <View style={[styles.summaryCard, { backgroundColor: colors.surface }]}>
@@ -192,121 +235,121 @@ export default function StatsScreen() {
             </View>
           </View>
 
-          {/* Current Month Card */}
-          {currentMonthStats && (
-            <View style={styles.sectionContainer}>
-              <Text style={[styles.sectionTitle, { color: colors.text }]}>This Month</Text>
-              <View style={[styles.currentMonthCard, { backgroundColor: colors.surface }]}>
-                <View style={styles.currentMonthRow}>
-                  <Text style={[styles.currentMonthLabel, { color: colors.textMuted }]}>Expenses</Text>
-                  <Text style={[styles.currentMonthValue, { color: colors.danger }]}>
-                    -{formatCurrency(currentMonthStats.total_expenses)}
-                  </Text>
-                </View>
-                <View style={styles.currentMonthRow}>
-                  <Text style={[styles.currentMonthLabel, { color: colors.textMuted }]}>Income</Text>
-                  <Text style={[styles.currentMonthValue, { color: colors.success }]}>
-                    +{formatCurrency(currentMonthStats.total_deposits)}
-                  </Text>
-                </View>
-                <View style={[styles.divider, { backgroundColor: colors.border }]} />
-                <View style={styles.currentMonthRow}>
-                  <Text style={[styles.currentMonthLabel, { color: colors.text, fontWeight: '600' }]}>Net</Text>
-                  <Text style={[
-                    styles.currentMonthValue,
-                    { color: currentMonthStats.net >= 0 ? colors.success : colors.danger, fontWeight: '700' }
-                  ]}>
-                    {currentMonthStats.net >= 0 ? '+' : ''}{formatCurrency(currentMonthStats.net)}
-                  </Text>
-                </View>
-              </View>
+          {/* Monthly History Carousel */}
+          <View style={styles.carouselSection}>
+            <View style={styles.carouselHeader}>
+              <Text style={[styles.sectionTitle, { color: colors.text }]}>Monthly History</Text>
+              {monthlyStats.length > 0 && (
+                <Text style={[styles.carouselIndicator, { color: colors.textMuted }]}>
+                  {currentIndex + 1} / {Math.min(monthlyStats.length, 12)}
+                </Text>
+              )}
             </View>
-          )}
-
-          {/* Monthly History */}
-          <View style={styles.sectionContainer}>
-            <Text style={[styles.sectionTitle, { color: colors.text }]}>Monthly History</Text>
             {monthlyStats.length === 0 ? (
-              <View style={[styles.emptyCard, { backgroundColor: colors.surface }]}>
+              <View style={[styles.emptyCard, { backgroundColor: colors.surface, marginHorizontal: 16 }]}>
                 <Text style={[styles.emptyText, { color: colors.textMuted }]}>
                   No payment history yet
                 </Text>
               </View>
             ) : (
-              monthlyStats.slice(0, 12).map((stat) => (
-                <View key={stat.month} style={[styles.monthCard, { backgroundColor: colors.surface }]}>
-                  <Text style={[styles.monthTitle, { color: colors.text }]}>
-                    {formatMonth(stat.month)}
-                  </Text>
-
-                  {/* Mini bar chart */}
-                  <View style={styles.barContainer}>
-                    <View style={styles.barRow}>
-                      <Text style={[styles.barLabel, { color: colors.textMuted }]}>Expenses</Text>
-                      <View style={[styles.barTrack, { backgroundColor: colors.border }]}>
-                        <View
-                          style={[
-                            styles.bar,
-                            {
-                              backgroundColor: colors.danger,
-                              width: `${(stat.total_expenses / maxValue) * 100}%`,
-                            },
-                          ]}
-                        />
-                      </View>
-                      <Text style={[styles.barValue, { color: colors.danger }]}>
-                        -{formatCurrency(stat.total_expenses)}
+              <>
+                <FlatList
+                  ref={carouselRef}
+                  data={monthlyStats.slice(0, 12)}
+                  horizontal
+                  pagingEnabled
+                  showsHorizontalScrollIndicator={false}
+                  snapToInterval={CARD_WIDTH + CARD_MARGIN * 2}
+                  decelerationRate="fast"
+                  contentContainerStyle={styles.carouselContent}
+                  onMomentumScrollEnd={(e) => {
+                    const index = Math.round(e.nativeEvent.contentOffset.x / (CARD_WIDTH + CARD_MARGIN * 2));
+                    setCurrentIndex(index);
+                  }}
+                  keyExtractor={(item) => item.month}
+                  renderItem={({ item: stat, index }) => (
+                    <View style={[styles.carouselCard, { backgroundColor: colors.surface, width: CARD_WIDTH }]}>
+                      <Text style={[styles.monthTitle, { color: colors.text }]}>
+                        {formatMonth(stat.month)}
                       </Text>
-                    </View>
-                    <View style={styles.barRow}>
-                      <Text style={[styles.barLabel, { color: colors.textMuted }]}>Income</Text>
-                      <View style={[styles.barTrack, { backgroundColor: colors.border }]}>
-                        <View
-                          style={[
-                            styles.bar,
-                            {
-                              backgroundColor: colors.success,
-                              width: `${(stat.total_deposits / maxValue) * 100}%`,
-                            },
-                          ]}
-                        />
-                      </View>
-                      <Text style={[styles.barValue, { color: colors.success }]}>
-                        +{formatCurrency(stat.total_deposits)}
-                      </Text>
-                    </View>
-                  </View>
 
-                  <View style={[styles.netRow, { borderTopColor: colors.border }]}>
-                    <Text style={[styles.netLabel, { color: colors.text }]}>Net</Text>
-                    <Text style={[
-                      styles.netValue,
-                      { color: stat.net >= 0 ? colors.success : colors.danger }
-                    ]}>
-                      {stat.net >= 0 ? '+' : ''}{formatCurrency(stat.net)}
-                    </Text>
-                  </View>
+                      {/* Summary Stats */}
+                      <View style={styles.carouselStats}>
+                        <View style={styles.carouselStatItem}>
+                          <Text style={[styles.carouselStatLabel, { color: colors.textMuted }]}>Expenses</Text>
+                          <Text style={[styles.carouselStatValue, { color: colors.danger }]}>
+                            -{formatCurrency(stat.total_expenses)}
+                          </Text>
+                        </View>
+                        <View style={[styles.carouselStatDivider, { backgroundColor: colors.border }]} />
+                        <View style={styles.carouselStatItem}>
+                          <Text style={[styles.carouselStatLabel, { color: colors.textMuted }]}>Income</Text>
+                          <Text style={[styles.carouselStatValue, { color: colors.success }]}>
+                            +{formatCurrency(stat.total_deposits)}
+                          </Text>
+                        </View>
+                      </View>
+
+                      {/* Mini bar chart */}
+                      <View style={styles.barContainer}>
+                        <View style={styles.barRow}>
+                          <Text style={[styles.barLabel, { color: colors.textMuted }]}>Expenses</Text>
+                          <View style={[styles.barTrack, { backgroundColor: colors.border }]}>
+                            <View
+                              style={[
+                                styles.bar,
+                                {
+                                  backgroundColor: colors.danger,
+                                  width: `${(stat.total_expenses / maxValue) * 100}%`,
+                                },
+                              ]}
+                            />
+                          </View>
+                        </View>
+                        <View style={styles.barRow}>
+                          <Text style={[styles.barLabel, { color: colors.textMuted }]}>Income</Text>
+                          <View style={[styles.barTrack, { backgroundColor: colors.border }]}>
+                            <View
+                              style={[
+                                styles.bar,
+                                {
+                                  backgroundColor: colors.success,
+                                  width: `${(stat.total_deposits / maxValue) * 100}%`,
+                                },
+                              ]}
+                            />
+                          </View>
+                        </View>
+                      </View>
+
+                      <View style={[styles.netRow, { borderTopColor: colors.border }]}>
+                        <Text style={[styles.netLabel, { color: colors.text }]}>Net</Text>
+                        <Text style={[
+                          styles.netValue,
+                          { color: stat.net >= 0 ? colors.success : colors.danger }
+                        ]}>
+                          {stat.net >= 0 ? '+' : ''}{formatCurrency(stat.net)}
+                        </Text>
+                      </View>
+                    </View>
+                  )}
+                />
+                {/* Dot Indicators */}
+                <View style={styles.dotContainer}>
+                  {monthlyStats.slice(0, 12).map((_, index) => (
+                    <View
+                      key={index}
+                      style={[
+                        styles.dot,
+                        {
+                          backgroundColor: index === currentIndex ? colors.primary : colors.border,
+                        },
+                      ]}
+                    />
+                  ))}
                 </View>
-              ))
+              </>
             )}
-          </View>
-
-          {/* Payment History Quick Access */}
-          <View style={styles.sectionContainer}>
-            <TouchableOpacity
-              style={[styles.paymentHistoryButton, { backgroundColor: colors.surface, borderColor: colors.border }]}
-              onPress={() => navigation.navigate('PaymentHistory' as never)}
-            >
-              <View style={styles.paymentHistoryContent}>
-                <Text style={[styles.paymentHistoryTitle, { color: colors.text }]}>
-                  Payment History
-                </Text>
-                <Text style={[styles.paymentHistorySubtitle, { color: colors.textMuted }]}>
-                  View all recorded payments
-                </Text>
-              </View>
-              <Text style={[styles.paymentHistoryArrow, { color: colors.textMuted }]}>→</Text>
-            </TouchableOpacity>
           </View>
 
           <View style={styles.footer} />
@@ -329,9 +372,17 @@ const styles = StyleSheet.create({
     padding: 20,
     paddingTop: 60,
   },
+  headerRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
   headerTitle: {
     fontSize: 28,
     fontWeight: 'bold',
+  },
+  usernameText: {
+    fontSize: 14,
   },
   headerSubtitle: {
     fontSize: 14,
@@ -387,31 +438,60 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     marginBottom: 12,
   },
-  currentMonthCard: {
-    borderRadius: 12,
-    padding: 16,
+  carouselSection: {
+    paddingTop: 8,
   },
-  currentMonthRow: {
+  carouselHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: 8,
+    paddingHorizontal: 16,
+    marginBottom: 12,
   },
-  currentMonthLabel: {
-    fontSize: 16,
+  carouselIndicator: {
+    fontSize: 14,
   },
-  currentMonthValue: {
-    fontSize: 18,
-    fontWeight: '600',
+  carouselContent: {
+    paddingHorizontal: 16,
   },
-  divider: {
-    height: 1,
-    marginVertical: 8,
-  },
-  monthCard: {
+  carouselCard: {
     borderRadius: 12,
     padding: 16,
-    marginBottom: 12,
+    marginHorizontal: CARD_MARGIN,
+  },
+  carouselStats: {
+    flexDirection: 'row',
+    marginBottom: 16,
+    marginTop: 8,
+  },
+  carouselStatItem: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  carouselStatLabel: {
+    fontSize: 12,
+    marginBottom: 4,
+  },
+  carouselStatValue: {
+    fontSize: 18,
+    fontWeight: '700',
+  },
+  carouselStatDivider: {
+    width: 1,
+    marginHorizontal: 16,
+  },
+  dotContainer: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: 16,
+    marginBottom: 8,
+  },
+  dot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    marginHorizontal: 4,
   },
   monthTitle: {
     fontSize: 16,
