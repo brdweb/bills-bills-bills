@@ -227,6 +227,7 @@ export interface AppConfig {
   deployment_mode: 'saas' | 'self-hosted';
   billing_enabled: boolean;
   registration_enabled: boolean;
+  email_enabled: boolean;
   email_verification_required: boolean;
 }
 

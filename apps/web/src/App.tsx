@@ -192,13 +192,11 @@ function App() {
 
   // Bill actions
   const handleAddBill = () => {
-    console.log('➕ App: handleAddBill called');
     setCurrentBill(null);
     openBillModal();
   };
 
   const handleEditBill = (bill: Bill) => {
-    console.log('📝 App: handleEditBill called', bill);
     setCurrentBill(bill);
     openBillModal();
   };

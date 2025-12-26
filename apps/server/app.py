@@ -31,7 +31,15 @@ from config import (
 )
 
 # --- JWT Configuration ---
-JWT_SECRET_KEY = os.environ.get('JWT_SECRET_KEY', os.environ.get('FLASK_SECRET_KEY', secrets.token_hex(32)))
+# In production, JWT_SECRET_KEY must be explicitly set
+_jwt_secret = os.environ.get('JWT_SECRET_KEY') or os.environ.get('FLASK_SECRET_KEY')
+if not _jwt_secret:
+    if os.environ.get('FLASK_ENV') == 'production' or os.environ.get('ENVIRONMENT') == 'production':
+        raise RuntimeError("JWT_SECRET_KEY or FLASK_SECRET_KEY must be set in production")
+    # Development only - generate ephemeral key with warning
+    _jwt_secret = secrets.token_hex(32)
+    logger.warning("No JWT_SECRET_KEY set - using ephemeral key. Tokens will be invalid after restart.")
+JWT_SECRET_KEY = _jwt_secret
 JWT_ACCESS_TOKEN_EXPIRES = timedelta(minutes=15)
 JWT_REFRESH_TOKEN_EXPIRES = timedelta(days=7)
 
@@ -1321,6 +1329,7 @@ def forgot_password():
 
 
 @api_v2_bp.route('/auth/reset-password', methods=['POST'])
+@limiter.limit("5 per minute;15 per hour")
 def reset_password():
     """Reset password with token."""
     data = request.get_json(force=True, silent=True)
@@ -2106,6 +2115,7 @@ def jwt_process_auto_payments():
     return jsonify({'success': True, 'data': {'processed_count': len(processed), 'bills': processed}})
 
 @api_v2_bp.route('/auth/change-password', methods=['POST'])
+@limiter.limit("5 per minute;15 per hour")
 def jwt_change_password():
     """Change password (for users with password_change_required or via change_token)."""
     data = request.get_json(force=True, silent=True)
@@ -3281,14 +3291,24 @@ def create_app():
             user_count = User.query.count()
             if user_count == 0:
                 logger.info("🚀 First run detected - creating default admin and database")
+                # Generate secure random password for first admin
+                initial_password = secrets.token_urlsafe(12)
                 admin = User(username='admin', role='admin', password_change_required=True)
-                admin.set_password('password'); db.session.add(admin)
+                admin.set_password(initial_password)
+                db.session.add(admin)
                 p_db = Database(name='personal', display_name='Personal Finances', description='Personal bills and expenses')
                 db.session.add(p_db)
                 db.session.flush()  # Get IDs before linking
                 admin.accessible_databases.append(p_db)
                 db.session.commit()
-                logger.info("✅ Default admin (username: admin, password: password) and database created")
+                # Print password to console only (not to log file) for initial setup
+                print("\n" + "=" * 60)
+                print("🔐 INITIAL ADMIN CREDENTIALS (save these now!)")
+                print(f"   Username: admin")
+                print(f"   Password: {initial_password}")
+                print("   You will be required to change this password on first login.")
+                print("=" * 60 + "\n")
+                logger.info("✅ Default admin and database created (credentials printed to console)")
             else:
                 logger.info(f"📦 Existing installation detected ({user_count} users) - skipping default creation")
         except Exception as e: logger.error(f"❌ Startup Error: {e}")

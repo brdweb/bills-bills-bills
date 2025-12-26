@@ -5,6 +5,7 @@ export interface AppConfig {
   deployment_mode: 'saas' | 'self-hosted';
   billing_enabled: boolean;
   registration_enabled: boolean;
+  email_enabled: boolean;
   email_verification_required: boolean;
 }
 
@@ -14,12 +15,14 @@ interface ConfigContextType {
   error: string | null;
   isSaas: boolean;
   isSelfHosted: boolean;
+  emailEnabled: boolean;
 }
 
 const defaultConfig: AppConfig = {
   deployment_mode: 'self-hosted',
   billing_enabled: false,
   registration_enabled: false,
+  email_enabled: false,
   email_verification_required: false,
 };
 
@@ -29,6 +32,7 @@ const ConfigContext = createContext<ConfigContextType>({
   error: null,
   isSaas: false,
   isSelfHosted: true,
+  emailEnabled: false,
 });
 
 export function ConfigProvider({ children }: { children: ReactNode }) {
@@ -65,6 +69,7 @@ export function ConfigProvider({ children }: { children: ReactNode }) {
     error,
     isSaas: config?.deployment_mode === 'saas',
     isSelfHosted: config?.deployment_mode === 'self-hosted',
+    emailEnabled: config?.email_enabled ?? false,
   };
 
   return (

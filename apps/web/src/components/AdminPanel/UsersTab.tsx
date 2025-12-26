@@ -15,8 +15,9 @@ import {
   Loader,
   Center,
   Divider,
+  Alert,
 } from '@mantine/core';
-import { IconTrash, IconEdit, IconMail, IconX } from '@tabler/icons-react';
+import { IconTrash, IconEdit, IconMail, IconX, IconMailOff } from '@tabler/icons-react';
 import type { User, Database, UserInvite } from '../../api/client';
 import {
   getUsers,
@@ -30,8 +31,10 @@ import {
   getInvites,
   cancelInvite,
 } from '../../api/client';
+import { useConfig } from '../../context/ConfigContext';
 
 export function UsersTab() {
+  const { emailEnabled } = useConfig();
   const [users, setUsers] = useState<User[]>([]);
   const [databases, setDatabases] = useState<Database[]>([]);
   const [invites, setInvites] = useState<UserInvite[]>([]);
@@ -227,122 +230,136 @@ export function UsersTab() {
         </Table.Tbody>
       </Table>
 
-      {/* Pending Invitations */}
-      {invites.length > 0 && (
+      {/* Invitations Section - Only shown when email is enabled */}
+      {emailEnabled ? (
+        <>
+          {/* Pending Invitations */}
+          {invites.length > 0 && (
+            <>
+              <Divider my="sm" />
+              <Text fw={600} size="sm">Pending Invitations</Text>
+              <Table striped highlightOnHover>
+                <Table.Thead>
+                  <Table.Tr>
+                    <Table.Th>Email</Table.Th>
+                    <Table.Th>Role</Table.Th>
+                    <Table.Th>Expires</Table.Th>
+                    <Table.Th>Actions</Table.Th>
+                  </Table.Tr>
+                </Table.Thead>
+                <Table.Tbody>
+                  {invites.map((invite) => (
+                    <Table.Tr key={invite.id}>
+                      <Table.Td>{invite.email}</Table.Td>
+                      <Table.Td>
+                        <Badge color={invite.role === 'admin' ? 'orange' : 'blue'}>
+                          {invite.role}
+                        </Badge>
+                      </Table.Td>
+                      <Table.Td>
+                        <Text size="sm" c="dimmed">
+                          {new Date(invite.expires_at).toLocaleDateString()}
+                        </Text>
+                      </Table.Td>
+                      <Table.Td>
+                        <ActionIcon
+                          variant="subtle"
+                          color="red"
+                          onClick={() => handleCancelInvite(invite.id)}
+                          title="Cancel Invitation"
+                        >
+                          <IconX size={18} />
+                        </ActionIcon>
+                      </Table.Td>
+                    </Table.Tr>
+                  ))}
+                </Table.Tbody>
+              </Table>
+            </>
+          )}
+
+          <Divider my="sm" />
+
+          {/* Invite User Form */}
+          {!showInviteForm ? (
+            <Button
+              leftSection={<IconMail size={16} />}
+              variant="light"
+              onClick={() => setShowInviteForm(true)}
+            >
+              Invite User
+            </Button>
+          ) : (
+            <Paper p="md" withBorder>
+              <Stack gap="sm">
+                <Text fw={500}>Invite New User</Text>
+                <Text size="sm" c="dimmed">
+                  Send an invitation email. The user will set their own username and password.
+                </Text>
+                <Group grow>
+                  <TextInput
+                    label="Email Address"
+                    type="email"
+                    value={inviteEmail}
+                    onChange={(e) => setInviteEmail(e.currentTarget.value)}
+                    placeholder="user@example.com"
+                  />
+                  <Select
+                    label="Role"
+                    value={inviteRole}
+                    onChange={(val) => setInviteRole(val || 'user')}
+                    data={[
+                      { value: 'user', label: 'User' },
+                      { value: 'admin', label: 'Admin' },
+                    ]}
+                  />
+                </Group>
+
+                <Text size="sm" fw={500}>
+                  Bill Group Access
+                </Text>
+                <Group>
+                  {databases.map((db) => (
+                    <Checkbox
+                      key={db.id}
+                      label={db.display_name}
+                      checked={selectedDatabases.includes(db.id!)}
+                      onChange={(e) => {
+                        if (e.currentTarget.checked) {
+                          setSelectedDatabases([...selectedDatabases, db.id!]);
+                        } else {
+                          setSelectedDatabases(selectedDatabases.filter((id) => id !== db.id));
+                        }
+                      }}
+                    />
+                  ))}
+                </Group>
+
+                <Group>
+                  <Button
+                    onClick={handleInviteUser}
+                    loading={inviteLoading}
+                    leftSection={<IconMail size={16} />}
+                  >
+                    Send Invitation
+                  </Button>
+                  <Button variant="default" onClick={() => setShowInviteForm(false)}>
+                    Cancel
+                  </Button>
+                </Group>
+              </Stack>
+            </Paper>
+          )}
+        </>
+      ) : (
         <>
           <Divider my="sm" />
-          <Text fw={600} size="sm">Pending Invitations</Text>
-          <Table striped highlightOnHover>
-            <Table.Thead>
-              <Table.Tr>
-                <Table.Th>Email</Table.Th>
-                <Table.Th>Role</Table.Th>
-                <Table.Th>Expires</Table.Th>
-                <Table.Th>Actions</Table.Th>
-              </Table.Tr>
-            </Table.Thead>
-            <Table.Tbody>
-              {invites.map((invite) => (
-                <Table.Tr key={invite.id}>
-                  <Table.Td>{invite.email}</Table.Td>
-                  <Table.Td>
-                    <Badge color={invite.role === 'admin' ? 'orange' : 'blue'}>
-                      {invite.role}
-                    </Badge>
-                  </Table.Td>
-                  <Table.Td>
-                    <Text size="sm" c="dimmed">
-                      {new Date(invite.expires_at).toLocaleDateString()}
-                    </Text>
-                  </Table.Td>
-                  <Table.Td>
-                    <ActionIcon
-                      variant="subtle"
-                      color="red"
-                      onClick={() => handleCancelInvite(invite.id)}
-                      title="Cancel Invitation"
-                    >
-                      <IconX size={18} />
-                    </ActionIcon>
-                  </Table.Td>
-                </Table.Tr>
-              ))}
-            </Table.Tbody>
-          </Table>
+          <Alert icon={<IconMailOff size={16} />} color="gray" variant="light">
+            <Text size="sm">
+              Email invitations are not available. Configure RESEND_API_KEY to enable sending invitations.
+            </Text>
+          </Alert>
         </>
-      )}
-
-      <Divider my="sm" />
-
-      {/* Invite User Form */}
-      {!showInviteForm ? (
-        <Button
-          leftSection={<IconMail size={16} />}
-          variant="light"
-          onClick={() => setShowInviteForm(true)}
-        >
-          Invite User
-        </Button>
-      ) : (
-        <Paper p="md" withBorder>
-          <Stack gap="sm">
-            <Text fw={500}>Invite New User</Text>
-            <Text size="sm" c="dimmed">
-              Send an invitation email. The user will set their own username and password.
-            </Text>
-            <Group grow>
-              <TextInput
-                label="Email Address"
-                type="email"
-                value={inviteEmail}
-                onChange={(e) => setInviteEmail(e.currentTarget.value)}
-                placeholder="user@example.com"
-              />
-              <Select
-                label="Role"
-                value={inviteRole}
-                onChange={(val) => setInviteRole(val || 'user')}
-                data={[
-                  { value: 'user', label: 'User' },
-                  { value: 'admin', label: 'Admin' },
-                ]}
-              />
-            </Group>
-
-            <Text size="sm" fw={500}>
-              Bill Group Access
-            </Text>
-            <Group>
-              {databases.map((db) => (
-                <Checkbox
-                  key={db.id}
-                  label={db.display_name}
-                  checked={selectedDatabases.includes(db.id!)}
-                  onChange={(e) => {
-                    if (e.currentTarget.checked) {
-                      setSelectedDatabases([...selectedDatabases, db.id!]);
-                    } else {
-                      setSelectedDatabases(selectedDatabases.filter((id) => id !== db.id));
-                    }
-                  }}
-                />
-              ))}
-            </Group>
-
-            <Group>
-              <Button
-                onClick={handleInviteUser}
-                loading={inviteLoading}
-                leftSection={<IconMail size={16} />}
-              >
-                Send Invitation
-              </Button>
-              <Button variant="default" onClick={() => setShowInviteForm(false)}>
-                Cancel
-              </Button>
-            </Group>
-          </Stack>
-        </Paper>
       )}
 
       {/* Edit User Modal */}

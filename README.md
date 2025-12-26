@@ -2,7 +2,7 @@
 
 A **secure multi-user** web application for tracking recurring expenses and income with **complete data separation**. Built with React + Mantine frontend and Flask + PostgreSQL backend.
 
-![BillManager Screenshot](docs/screenshot.png)
+![BillManager Screenshot](https://docs.billmanager.app/img/screenshot.png)
 
 ## Features
 
@@ -147,18 +147,43 @@ postgresql://USERNAME:PASSWORD@HOST:PORT/DATABASE
 | Variable | Description | Default |
 |----------|-------------|---------|
 | `DATABASE_URL` | PostgreSQL connection string | `postgresql://billsuser:billspass@db:5432/billsdb` |
-| `FLASK_SECRET_KEY` | Secret key for session encryption | Auto-generated (set in production!) |
+| `FLASK_SECRET_KEY` | Secret key for session encryption | **Required in production** |
 | `JWT_SECRET_KEY` | Secret key for mobile API tokens | Falls back to `FLASK_SECRET_KEY` |
+| `RESEND_API_KEY` | Email provider API key (enables invitations) | None |
+| `FROM_EMAIL` | Sender email address | None |
+| `APP_URL` | Application URL for email links | `http://localhost:5000` |
 
-**Security Note:** Always set strong, unique secret keys in production. Generate with: `openssl rand -hex 32`
+**Security Note:** In production, `JWT_SECRET_KEY` or `FLASK_SECRET_KEY` **must** be explicitly set. The application will refuse to start without it. Generate secure keys with: `openssl rand -hex 32`
+
+For complete self-hosted configuration options, see the [Self-Hosted Installation Guide](https://docs.billmanager.app/category/self-hosted).
 
 ## First Login
 
-Login with default credentials:
-- **Username:** `admin`
-- **Password:** `password`
+### Using the Hosted Version (app.billmanager.app)
 
-**Security Notice:** You will be **required to change the password** on first login.
+Sign up at [app.billmanager.app](https://app.billmanager.app) with your email address.
+
+### Self-Hosted Installations
+
+On first startup, BillManager creates a default admin account with a **randomly generated secure password**. This password is printed to the container logs:
+
+```bash
+docker-compose logs billmanager | grep -A 5 "INITIAL ADMIN CREDENTIALS"
+```
+
+You will see:
+```
+============================================================
+INITIAL ADMIN CREDENTIALS (save these now!)
+   Username: admin
+   Password: xK9mP2vL7nQr3wYz
+   You will be required to change this password on first login.
+============================================================
+```
+
+**Save this password immediately!** It is only shown once during initial startup.
+
+See the [Self-Hosted Installation Guide](https://docs.billmanager.app/category/self-hosted) for complete setup instructions.
 
 ## How to Use
 
@@ -268,9 +293,12 @@ Version 3.0 uses PostgreSQL instead of SQLite. If upgrading from v2.x:
 
 ## Security Features
 
-- **Forced Password Change**: Default admin credentials require immediate password update
+- **Secure Default Credentials**: Random admin password generated on first run (self-hosted)
+- **Forced Password Change**: Admin credentials require immediate password update
+- **Production-Safe Configuration**: Secret keys must be explicitly set in production
+- **Rate Limiting**: Authentication endpoints protected against brute force attacks
 - **Row-Level Isolation**: Complete separation between different user databases
-- **Secure Authentication**: Session-based authentication with secure cookies
+- **Secure Authentication**: Session-based auth with secure cookies + JWT for mobile API
 - **Input Validation**: All user inputs are properly sanitized
 - **Admin Controls**: Granular permissions and access control
 - **HTTPS Ready**: Deploy behind a reverse proxy (Traefik, nginx) for SSL

@@ -117,14 +117,11 @@ export function BillModal({ opened, onClose, onSave, onArchive, onUnarchive, onD
 
   useEffect(() => {
     if (opened) {
-      console.log('🏁 BillModal: Modal opened, fetching accounts...');
       api.getAccounts()
         .then(response => {
-          console.log('✅ BillModal: Accounts fetched:', response.data);
           setAccounts(response.data);
         })
-        .catch(err => {
-          console.error('❌ BillModal: Failed to fetch accounts:', err);
+        .catch(() => {
           setAccounts([]); // Fallback to empty list instead of crashing
         });
     }
@@ -132,14 +129,13 @@ export function BillModal({ opened, onClose, onSave, onArchive, onUnarchive, onD
 
   useEffect(() => {
     if (opened) {
-      console.log('🏁 BillModal: Initializing form with bill:', bill);
       try {
         if (bill) {
           let frequencyConfig: { dates?: number[]; days?: number[] } = {};
           try {
             frequencyConfig = bill.frequency_config ? JSON.parse(bill.frequency_config) : {};
-          } catch (e) {
-            console.error('❌ BillModal: Failed to parse frequency_config:', e);
+          } catch {
+            // Fallback to empty config if parsing fails
           }
           
           form.setValues({
@@ -157,11 +153,10 @@ export function BillModal({ opened, onClose, onSave, onArchive, onUnarchive, onD
             account: bill.account || null,
           });
         } else {
-          console.log('✨ BillModal: Resetting form for new entry');
           form.reset();
         }
-      } catch (err) {
-        console.error('❌ BillModal: CRITICAL error during form initialization:', err);
+      } catch {
+        // Form initialization error - silent fail, form will be in default state
       }
     }
   }, [bill, opened]);
@@ -234,8 +229,6 @@ export function BillModal({ opened, onClose, onSave, onArchive, onUnarchive, onD
         account: values.account || null,
       };
 
-      console.log('📤 BillModal: Saving bill with data:', billData);
-      console.log('📤 BillModal: Type =', values.type, 'Account =', values.account);
       await onSave(billData);
       window.umami?.track(bill ? 'bill_updated' : 'bill_created', { type: values.type });
       onClose();

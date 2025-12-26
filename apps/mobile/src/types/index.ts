@@ -18,6 +18,7 @@ export interface User {
   username: string;
   email?: string;
   role: 'admin' | 'user';
+  is_account_owner?: boolean;
 }
 
 export interface DatabaseInfo {
