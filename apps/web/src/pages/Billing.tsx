@@ -62,8 +62,8 @@ export function Billing() {
         api.getSubscriptionStatus(),
         api.getBillingUsage(),
       ]);
-      setStatus(statusRes.data);
-      setUsage(usageRes.data);
+      setStatus(statusRes);
+      setUsage(usageRes);
     } catch {
       setError('Failed to load billing information');
     } finally {

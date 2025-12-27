@@ -260,8 +260,10 @@ export interface AppConfigResponse {
   data: AppConfig;
 }
 
-export const getAppConfig = () =>
-  unwrap(api.get<AppConfigResponse>('/api/v2/config'));
+export const getAppConfig = async () => {
+  const response = await unwrap(api.get<AppConfigResponse>('/api/v2/config'));
+  return response.data;
+};
 
 // Registration & Auth API (v2)
 export interface RegisterRequest {
@@ -350,11 +352,15 @@ export interface CheckoutResponse {
 export const getBillingConfig = () =>
   unwrap(api.get<BillingConfig>('/api/v2/billing/config'));
 
-export const getSubscriptionStatus = () =>
-  unwrap(api.get<{ success: boolean; data: SubscriptionStatus }>('/api/v2/billing/status'));
+export const getSubscriptionStatus = async () => {
+  const response = await unwrap(api.get<{ success: boolean; data: SubscriptionStatus }>('/api/v2/billing/status'));
+  return response.data;
+};
 
-export const getBillingUsage = () =>
-  unwrap(api.get<{ success: boolean; data: BillingUsage }>('/api/v2/billing/usage'));
+export const getBillingUsage = async () => {
+  const response = await unwrap(api.get<{ success: boolean; data: BillingUsage }>('/api/v2/billing/usage'));
+  return response.data;
+};
 
 export const createCheckoutSession = (tier: string = 'basic', interval: string = 'monthly') =>
   unwrap(api.post<CheckoutResponse>('/api/v2/billing/create-checkout', { tier, interval }));
