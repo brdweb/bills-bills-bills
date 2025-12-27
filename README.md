@@ -180,7 +180,6 @@ Complete documentation is available at **[docs.billmanager.app](https://docs.bil
 - [Self-Hosted Installation](https://docs.billmanager.app/category/self-hosted)
 - [Configuration Reference](https://docs.billmanager.app/self-hosted/configuration)
 - [User Management](https://docs.billmanager.app/self-hosted/user-management)
-- [API Documentation](https://docs.billmanager.app/api)
 
 ## Application Management
 
@@ -256,8 +255,6 @@ Docker Compose uses a named volume for PostgreSQL data:
 - **Email:** Resend for transactional emails
 - **Security:** Flask-Limiter, Flask-Talisman, bcrypt password hashing
 - **Validation:** Server-side input validation with RFC-compliant patterns
-
-For detailed API documentation, visit [docs.billmanager.app/api](https://docs.billmanager.app/api).
 
 ---
 
