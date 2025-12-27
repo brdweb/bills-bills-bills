@@ -3282,10 +3282,10 @@ def jwt_sync_full():
 
 def get_client_dir():
     """Return the path to the client directory (dist for production, client for dev)."""
-    dist_dir = os.path.join(os.path.dirname(__file__), '..', 'client', 'dist')
+    dist_dir = os.path.join(os.path.dirname(__file__), '..', 'web', 'dist')
     if os.path.exists(dist_dir):
         return dist_dir
-    return os.path.join(os.path.dirname(__file__), '..', 'client')
+    return os.path.join(os.path.dirname(__file__), '..', 'web')
 
 @spa_bp.route('/', methods=['GET'])
 def index():
