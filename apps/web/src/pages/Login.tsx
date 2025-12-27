@@ -128,11 +128,11 @@ export function Login() {
         email: signupEmail,
         password: signupPassword,
       });
-      if (response.data.success) {
+      if (response.success) {
         setSignupSuccess(true);
         window.umami?.track('user_registered');
       } else {
-        setSignupError(response.data.error || 'Registration failed');
+        setSignupError(response.error || 'Registration failed');
       }
     } catch (err: unknown) {
       const error = err as { response?: { data?: { error?: string } } };

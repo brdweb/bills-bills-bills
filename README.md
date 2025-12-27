@@ -152,8 +152,19 @@ postgresql://USERNAME:PASSWORD@HOST:PORT/DATABASE
 | `RESEND_API_KEY` | Email provider API key (enables invitations) | None |
 | `FROM_EMAIL` | Sender email address | None |
 | `APP_URL` | Application URL for email links | `http://localhost:5000` |
+| `ALLOWED_ORIGINS` | Comma-separated list of allowed CORS origins | Uses `APP_URL` or localhost |
 
 **Security Note:** In production, `JWT_SECRET_KEY` or `FLASK_SECRET_KEY` **must** be explicitly set. The application will refuse to start without it. Generate secure keys with: `openssl rand -hex 32`
+
+#### CORS Configuration
+
+BillManager uses a three-tier priority system for CORS origins:
+
+1. **`ALLOWED_ORIGINS`** - Explicit comma-separated list (e.g., `https://app1.com,https://app2.com`)
+2. **`APP_URL`** - Single origin for typical deployments
+3. **Localhost defaults** - For development without configuration
+
+This ensures secure self-hosted deployments while remaining flexible for development.
 
 For complete self-hosted configuration options, see the [Self-Hosted Installation Guide](https://docs.billmanager.app/category/self-hosted).
 

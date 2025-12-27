@@ -27,9 +27,11 @@ import {
   IconCalendar,
   IconRocket,
   IconArrowLeft,
+  IconServer,
 } from '@tabler/icons-react';
 import * as api from '../api/client';
 import type { SubscriptionStatus, BillingUsage } from '../api/client';
+import { useConfig } from '../context/ConfigContext';
 
 const PRICING = {
   basic: { monthly: 5, annual: 50 },
@@ -37,6 +39,7 @@ const PRICING = {
 };
 
 export function Billing() {
+  const { isSelfHosted } = useConfig();
   const [status, setStatus] = useState<SubscriptionStatus | null>(null);
   const [usage, setUsage] = useState<BillingUsage | null>(null);
   const [loading, setLoading] = useState(true);
@@ -45,8 +48,13 @@ export function Billing() {
   const [billingInterval, setBillingInterval] = useState<'monthly' | 'annual'>('monthly');
 
   useEffect(() => {
+    // Self-hosted servers don't have subscription management
+    if (isSelfHosted) {
+      setLoading(false);
+      return;
+    }
     fetchData();
-  }, []);
+  }, [isSelfHosted]);
 
   const fetchData = async () => {
     try {
@@ -54,8 +62,8 @@ export function Billing() {
         api.getSubscriptionStatus(),
         api.getBillingUsage(),
       ]);
-      setStatus(statusRes.data.data);
-      setUsage(usageRes.data.data);
+      setStatus(statusRes.data);
+      setUsage(usageRes.data);
     } catch {
       setError('Failed to load billing information');
     } finally {
@@ -67,11 +75,11 @@ export function Billing() {
     setActionLoading(true);
     try {
       const response = await api.createCheckoutSession(tier, billingInterval);
-      if (response.data.success && response.data.url) {
+      if (response.success && response.url) {
         window.umami?.track('checkout_started', { tier, interval: billingInterval });
-        window.location.href = response.data.url;
+        window.location.href = response.url;
       } else {
-        setError(response.data.error || 'Failed to create checkout session');
+        setError(response.error || 'Failed to create checkout session');
       }
     } catch {
       setError('Failed to start subscription process');
@@ -84,10 +92,10 @@ export function Billing() {
     setActionLoading(true);
     try {
       const response = await api.createPortalSession();
-      if (response.data.success && response.data.url) {
-        window.location.href = response.data.url;
+      if (response.success && response.url) {
+        window.location.href = response.url;
       } else {
-        setError(response.data.error || 'Failed to open billing portal');
+        setError(response.error || 'Failed to open billing portal');
       }
     } catch {
       setError('Failed to open billing portal');
@@ -102,6 +110,58 @@ export function Billing() {
         <Center py="xl">
           <Loader size="lg" />
         </Center>
+      </Container>
+    );
+  }
+
+  // Self-hosted servers don't need subscription management
+  if (isSelfHosted) {
+    return (
+      <Container size="md" my={40}>
+        <Button
+          component={Link}
+          to="/"
+          variant="subtle"
+          leftSection={<IconArrowLeft size={16} />}
+          mb="md"
+        >
+          Back to Bills
+        </Button>
+        <Title ta="center" mb="lg">Billing & Subscription</Title>
+
+        <Paper withBorder shadow="md" p="xl" radius="md">
+          <Stack align="center" gap="lg">
+            <ThemeIcon size={80} radius="xl" variant="light" color="green">
+              <IconServer size={40} />
+            </ThemeIcon>
+            <Stack align="center" gap="xs">
+              <Title order={2}>Self-Hosted Instance</Title>
+              <Text size="lg" c="dimmed" ta="center">
+                You are connected to a self-hosted BillManager server.
+              </Text>
+            </Stack>
+            <Alert color="green" variant="light" w="100%">
+              <Text size="sm">
+                Subscription management is only available for BillManager Cloud users.
+                Self-hosted servers have unlimited access to all features at no additional cost.
+              </Text>
+            </Alert>
+            <Stack gap="xs" w="100%">
+              <Text fw={600} size="lg">Unlimited Features Include:</Text>
+              <List
+                spacing="sm"
+                icon={<IconCheck size={16} color="var(--mantine-color-green-6)" />}
+              >
+                <List.Item>Unlimited bills and income tracking</List.Item>
+                <List.Item>Unlimited family members and users</List.Item>
+                <List.Item>Unlimited bill groups</List.Item>
+                <List.Item>Full analytics and reporting</List.Item>
+                <List.Item>Export to CSV/PDF</List.Item>
+                <List.Item>All features included forever</List.Item>
+              </List>
+            </Stack>
+          </Stack>
+        </Paper>
       </Container>
     );
   }

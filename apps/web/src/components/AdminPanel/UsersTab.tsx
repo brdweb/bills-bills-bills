@@ -17,7 +17,7 @@ import {
   Divider,
   Alert,
 } from '@mantine/core';
-import { IconTrash, IconEdit, IconMail, IconX, IconMailOff } from '@tabler/icons-react';
+import { IconTrash, IconEdit, IconMail, IconX, IconMailOff, IconUserPlus } from '@tabler/icons-react';
 import type { User, Database, UserInvite } from '../../api/client';
 import {
   getUsers,
@@ -30,22 +30,31 @@ import {
   inviteUser,
   getInvites,
   cancelInvite,
+  addUser,
 } from '../../api/client';
 import { useConfig } from '../../context/ConfigContext';
 
 export function UsersTab() {
-  const { emailEnabled } = useConfig();
+  const { emailEnabled, isSelfHosted } = useConfig();
   const [users, setUsers] = useState<User[]>([]);
   const [databases, setDatabases] = useState<Database[]>([]);
   const [invites, setInvites] = useState<UserInvite[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // Invite user form
+  // Invite user form (for SaaS with email enabled)
   const [showInviteForm, setShowInviteForm] = useState(false);
   const [inviteEmail, setInviteEmail] = useState('');
   const [inviteRole, setInviteRole] = useState<string>('user');
   const [selectedDatabases, setSelectedDatabases] = useState<number[]>([]);
   const [inviteLoading, setInviteLoading] = useState(false);
+
+  // Create user form (for self-hosted mode)
+  const [showCreateForm, setShowCreateForm] = useState(false);
+  const [createUsername, setCreateUsername] = useState('');
+  const [createPassword, setCreatePassword] = useState('');
+  const [createRole, setCreateRole] = useState<string>('user');
+  const [createDatabases, setCreateDatabases] = useState<number[]>([]);
+  const [createLoading, setCreateLoading] = useState(false);
 
   // Edit user modal
   const [editingUser, setEditingUser] = useState<User | null>(null);
@@ -64,13 +73,13 @@ export function UsersTab() {
         getUsers(),
         getDatabases(),
       ]);
-      setUsers(usersRes.data);
-      setDatabases(dbsRes.data);
+      setUsers(usersRes);
+      setDatabases(dbsRes);
 
       // Fetch invites separately so it doesn't break if table doesn't exist yet
       try {
         const invitesRes = await getInvites();
-        setInvites(invitesRes.data);
+        setInvites(invitesRes);
       } catch (inviteError) {
         console.error('Failed to fetch invites:', inviteError);
         setInvites([]);
@@ -97,6 +106,28 @@ export function UsersTab() {
       alert(error.response?.data?.error || 'Failed to send invitation');
     } finally {
       setInviteLoading(false);
+    }
+  };
+
+  const handleCreateUser = async () => {
+    if (!createUsername || !createPassword) {
+      alert('Username and password are required');
+      return;
+    }
+
+    setCreateLoading(true);
+    try {
+      await addUser(createUsername, createPassword, createRole, createDatabases);
+      await fetchData();
+      setShowCreateForm(false);
+      setCreateUsername('');
+      setCreatePassword('');
+      setCreateRole('user');
+      setCreateDatabases([]);
+    } catch (error: any) {
+      alert(error.response?.data?.error || 'Failed to create user');
+    } finally {
+      setCreateLoading(false);
     }
   };
 
@@ -128,7 +159,7 @@ export function UsersTab() {
     setAccessLoading(true);
     try {
       const response = await getUserDatabases(user.id);
-      setUserDatabases(response.data.map((db) => db.id!));
+      setUserDatabases(response.map((db) => db.id!));
     } catch (error) {
       console.error('Failed to fetch user databases:', error);
     } finally {
@@ -149,7 +180,7 @@ export function UsersTab() {
 
       // Get current databases
       const currentRes = await getUserDatabases(editingUser.id);
-      const currentDbIds = currentRes.data.map((db) => db.id!);
+      const currentDbIds = currentRes.map((db) => db.id!);
 
       // Find databases to add and remove
       const toAdd = userDatabases.filter((id) => !currentDbIds.includes(id));
@@ -230,13 +261,94 @@ export function UsersTab() {
         </Table.Tbody>
       </Table>
 
-      {/* Invitations Section - Only shown when email is enabled */}
-      {emailEnabled ? (
+      <Divider my="sm" />
+
+      {/* User Creation Section */}
+      {isSelfHosted ? (
+        /* Self-hosted mode: Direct user creation */
+        !showCreateForm ? (
+          <Button
+            leftSection={<IconUserPlus size={16} />}
+            variant="light"
+            onClick={() => setShowCreateForm(true)}
+          >
+            Create User
+          </Button>
+        ) : (
+          <Paper p="md" withBorder>
+            <Stack gap="sm">
+              <Text fw={500}>Create New User</Text>
+              <Text size="sm" c="dimmed">
+                Create a user account with username and password. The user can log in immediately.
+              </Text>
+              <Group grow>
+                <TextInput
+                  label="Username"
+                  value={createUsername}
+                  onChange={(e) => setCreateUsername(e.currentTarget.value)}
+                  placeholder="johndoe"
+                  required
+                />
+                <TextInput
+                  label="Password"
+                  type="password"
+                  value={createPassword}
+                  onChange={(e) => setCreatePassword(e.currentTarget.value)}
+                  placeholder="••••••••"
+                  required
+                />
+              </Group>
+              <Select
+                label="Role"
+                value={createRole}
+                onChange={(val) => setCreateRole(val || 'user')}
+                data={[
+                  { value: 'user', label: 'User' },
+                  { value: 'admin', label: 'Admin' },
+                ]}
+              />
+
+              <Text size="sm" fw={500}>
+                Bill Group Access
+              </Text>
+              <Group>
+                {databases.map((db) => (
+                  <Checkbox
+                    key={db.id}
+                    label={db.display_name}
+                    checked={createDatabases.includes(db.id!)}
+                    onChange={(e) => {
+                      if (e.currentTarget.checked) {
+                        setCreateDatabases([...createDatabases, db.id!]);
+                      } else {
+                        setCreateDatabases(createDatabases.filter((id) => id !== db.id));
+                      }
+                    }}
+                  />
+                ))}
+              </Group>
+
+              <Group>
+                <Button
+                  onClick={handleCreateUser}
+                  loading={createLoading}
+                  leftSection={<IconUserPlus size={16} />}
+                >
+                  Create User
+                </Button>
+                <Button variant="default" onClick={() => setShowCreateForm(false)}>
+                  Cancel
+                </Button>
+              </Group>
+            </Stack>
+          </Paper>
+        )
+      ) : emailEnabled ? (
+        /* SaaS mode with email: Email invitations */
         <>
           {/* Pending Invitations */}
           {invites.length > 0 && (
             <>
-              <Divider my="sm" />
               <Text fw={600} size="sm">Pending Invitations</Text>
               <Table striped highlightOnHover>
                 <Table.Thead>

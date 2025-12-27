@@ -40,10 +40,10 @@ export function ResendVerification() {
     setLoading(true);
     try {
       const response = await api.resendVerification(email);
-      if (response.data.success) {
+      if (response.success) {
         setSuccess(true);
       } else {
-        setError(response.data.error || 'Failed to resend verification email');
+        setError(response.error || 'Failed to resend verification email');
       }
     } catch (err: unknown) {
       const error = err as { response?: { data?: { error?: string } } };

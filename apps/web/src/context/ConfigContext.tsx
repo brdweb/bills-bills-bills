@@ -16,6 +16,9 @@ interface ConfigContextType {
   isSaas: boolean;
   isSelfHosted: boolean;
   emailEnabled: boolean;
+  billingEnabled: boolean;
+  registrationEnabled: boolean;
+  refetch: () => Promise<void>;
 }
 
 const defaultConfig: AppConfig = {
@@ -33,6 +36,9 @@ const ConfigContext = createContext<ConfigContextType>({
   isSaas: false,
   isSelfHosted: true,
   emailEnabled: false,
+  billingEnabled: false,
+  registrationEnabled: false,
+  refetch: async () => {},
 });
 
 export function ConfigProvider({ children }: { children: ReactNode }) {
@@ -40,26 +46,28 @@ export function ConfigProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    const fetchConfig = async () => {
-      try {
-        const response = await api.getAppConfig();
-        if (response.data.success) {
-          setConfig(response.data.data);
-        } else {
-          // Fall back to default if API fails
-          setConfig(defaultConfig);
-        }
-      } catch (err) {
-        console.error('Failed to fetch app config:', err);
-        // Fall back to default config on error
+  const fetchConfig = async () => {
+    try {
+      const response = await api.getAppConfig();
+      if (response.success) {
+        setConfig(response.data);
+        setError(null);
+      } else {
+        // Fall back to default if API fails
         setConfig(defaultConfig);
-        setError('Failed to load configuration');
-      } finally {
-        setLoading(false);
+        setError(response.error || 'Failed to load config');
       }
-    };
+    } catch (err) {
+      console.error('Failed to fetch app config:', err);
+      // Fall back to default config on error
+      setConfig(defaultConfig);
+      setError('Failed to load configuration');
+    } finally {
+      setLoading(false);
+    }
+  };
 
+  useEffect(() => {
     fetchConfig();
   }, []);
 
@@ -70,6 +78,9 @@ export function ConfigProvider({ children }: { children: ReactNode }) {
     isSaas: config?.deployment_mode === 'saas',
     isSelfHosted: config?.deployment_mode === 'self-hosted',
     emailEnabled: config?.email_enabled ?? false,
+    billingEnabled: config?.billing_enabled ?? false,
+    registrationEnabled: config?.registration_enabled ?? false,
+    refetch: fetchConfig,
   };
 
   return (

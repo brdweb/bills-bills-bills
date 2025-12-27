@@ -21,6 +21,12 @@ api.interceptors.response.use(
   }
 );
 
+// Helper to unwrap axios responses for consistency with mobile client
+const unwrap = async <T>(promise: Promise<{ data: T }>) => {
+  const response = await promise;
+  return response.data;
+};
+
 // Types
 export interface User {
   id: number;
@@ -95,11 +101,13 @@ export interface MeResponse {
 
 // Auth API
 export const login = (username: string, password: string) =>
-  api.post<LoginResponse>('/login', { username, password });
+  unwrap(api.post<LoginResponse>('/login', { username, password }));
 
-export const logout = () => api.post('/logout');
+export const logout = () =>
+  unwrap(api.post('/logout'));
 
-export const getMe = () => api.get<MeResponse>('/me');
+export const getMe = () =>
+  unwrap(api.get<MeResponse>('/me'));
 
 export const changePassword = (
   user_id: number,
@@ -107,49 +115,55 @@ export const changePassword = (
   current_password: string,
   new_password: string
 ) =>
-  api.post<{ message: string; role: string; databases: Database[] }>('/change-password', {
+  unwrap(api.post<{ message: string; role: string; databases: Database[] }>('/change-password', {
     user_id,
     change_token,
     current_password,
     new_password,
-  });
+  }));
 
 // Database API
-export const selectDatabase = (dbName: string) => api.post(`/select-db/${dbName}`);
+export const selectDatabase = (dbName: string) =>
+  unwrap(api.post(`/select-db/${dbName}`));
 
-export const getDatabases = () => api.get<Database[]>('/databases');
+export const getDatabases = () =>
+  unwrap(api.get<Database[]>('/databases'));
 
 export const createDatabase = (name: string, display_name: string, description: string) =>
-  api.post('/databases', { name, display_name, description });
+  unwrap(api.post('/databases', { name, display_name, description }));
 
-export const deleteDatabase = (dbId: number) => api.delete(`/databases/${dbId}`);
+export const deleteDatabase = (dbId: number) =>
+  unwrap(api.delete(`/databases/${dbId}`));
 
 export const getDatabaseAccess = (dbId: number) =>
-  api.get<User[]>(`/databases/${dbId}/access`);
+  unwrap(api.get<User[]>(`/databases/${dbId}/access`));
 
 export const grantDatabaseAccess = (dbId: number, userId: number) =>
-  api.post(`/databases/${dbId}/access`, { user_id: userId });
+  unwrap(api.post(`/databases/${dbId}/access`, { user_id: userId }));
 
 export const revokeDatabaseAccess = (dbId: number, userId: number) =>
-  api.delete(`/databases/${dbId}/access/${userId}`);
+  unwrap(api.delete(`/databases/${dbId}/access/${userId}`));
 
 // User API
-export const getUsers = () => api.get<User[]>('/users');
+export const getUsers = () =>
+  unwrap(api.get<User[]>('/users'));
 
 export const addUser = (
   username: string,
   password: string,
   role: string,
   database_ids: number[]
-) => api.post('/users', { username, password, role, database_ids });
+) =>
+  unwrap(api.post('/users', { username, password, role, database_ids }));
 
-export const deleteUser = (userId: number) => api.delete(`/users/${userId}`);
+export const deleteUser = (userId: number) =>
+  unwrap(api.delete(`/users/${userId}`));
 
 export const updateUser = (userId: number, data: { email?: string | null }) =>
-  api.put<User>(`/users/${userId}`, data);
+  unwrap(api.put<User>(`/users/${userId}`, data));
 
 export const getUserDatabases = (userId: number) =>
-  api.get<Database[]>(`/users/${userId}/databases`);
+  unwrap(api.get<Database[]>(`/users/${userId}/databases`));
 
 // User Invitations API
 export interface UserInvite {
@@ -161,17 +175,19 @@ export interface UserInvite {
 }
 
 export const inviteUser = (email: string, role: string, database_ids: number[]) =>
-  api.post<{ message: string; id: number }>('/users/invite', { email, role, database_ids });
+  unwrap(api.post<{ message: string; id: number }>('/users/invite', { email, role, database_ids }));
 
-export const getInvites = () => api.get<UserInvite[]>('/users/invites');
+export const getInvites = () =>
+  unwrap(api.get<UserInvite[]>('/users/invites'));
 
-export const cancelInvite = (inviteId: number) => api.delete(`/users/invites/${inviteId}`);
+export const cancelInvite = (inviteId: number) =>
+  unwrap(api.delete(`/users/invites/${inviteId}`));
 
 export const getInviteInfo = (token: string) =>
-  api.get<{ email: string; invited_by: string; expires_at: string }>(`/invite-info?token=${token}`);
+  unwrap(api.get<{ email: string; invited_by: string; expires_at: string }>(`/invite-info?token=${token}`));
 
 export const acceptInvite = (token: string, username: string, password: string) =>
-  api.post<{ message: string; username: string }>('/accept-invite', { token, username, password });
+  unwrap(api.post<{ message: string; username: string }>('/accept-invite', { token, username, password }));
 
 // Bills API
 export const getBills = (includeArchived = false, type?: 'expense' | 'deposit') => {
@@ -179,48 +195,56 @@ export const getBills = (includeArchived = false, type?: 'expense' | 'deposit') 
   if (type) {
     url += includeArchived ? `&type=${type}` : `?type=${type}`;
   }
-  return api.get<Bill[]>(url);
+  return unwrap(api.get<Bill[]>(url));
 };
 
-export const addBill = (bill: Partial<Bill>) => api.post('/bills', bill);
+export const addBill = (bill: Partial<Bill>) =>
+  unwrap(api.post('/bills', bill));
 
-export const getAccounts = () => api.get<string[]>('/api/accounts');
+export const getAccounts = () =>
+  unwrap(api.get<string[]>('/api/accounts'));
 
 export const updateBill = (id: number, bill: Partial<Bill>) =>
-  api.put(`/bills/${id}`, bill);
+  unwrap(api.put(`/bills/${id}`, bill));
 
-export const archiveBill = (id: number) => api.delete(`/bills/${id}`);
+export const archiveBill = (id: number) =>
+  unwrap(api.delete(`/bills/${id}`));
 
-export const unarchiveBill = (id: number) => api.post(`/bills/${id}/unarchive`);
+export const unarchiveBill = (id: number) =>
+  unwrap(api.post(`/bills/${id}/unarchive`));
 
-export const deleteBillPermanent = (id: number) => api.delete(`/bills/${id}/permanent`);
+export const deleteBillPermanent = (id: number) =>
+  unwrap(api.delete(`/bills/${id}/permanent`));
 
 export const payBill = (id: number, amount: number, advance_due: boolean) =>
-  api.post(`/bills/${id}/pay`, { amount, advance_due });
+  unwrap(api.post(`/bills/${id}/pay`, { amount, advance_due }));
 
 // Payments API
 export const getPayments = (billId: number) =>
-  api.get<Payment[]>(`/bills/${billId}/payments`);
+  unwrap(api.get<Payment[]>(`/bills/${billId}/payments`));
 
 export const updatePayment = (id: number, amount: number, payment_date: string) =>
-  api.put(`/payments/${id}`, { amount, payment_date });
+  unwrap(api.put(`/payments/${id}`, { amount, payment_date }));
 
-export const deletePayment = (id: number) => api.delete(`/payments/${id}`);
+export const deletePayment = (id: number) =>
+  unwrap(api.delete(`/payments/${id}`));
 
 export const getMonthlyPayments = () =>
-  api.get<Record<string, number>>('/api/payments/monthly');
+  unwrap(api.get<Record<string, number>>('/api/payments/monthly'));
 
 export const getAllPayments = () =>
-  api.get<PaymentWithBill[]>('/api/payments/all');
+  unwrap(api.get<PaymentWithBill[]>('/api/payments/all'));
 
 export const getBillMonthlyPayments = (billName: string) =>
-  api.get<MonthlyBillPayment[]>(`/api/payments/bill/${encodeURIComponent(billName)}/monthly`);
+  unwrap(api.get<MonthlyBillPayment[]>(`/api/payments/bill/${encodeURIComponent(billName)}/monthly`));
 
 // Auto-payment API
-export const processAutoPayments = () => api.post('/api/process-auto-payments');
+export const processAutoPayments = () =>
+  unwrap(api.post('/api/process-auto-payments'));
 
 // Version API
-export const getVersion = () => api.get<{ version: string; features: string[] }>('/api/version');
+export const getVersion = () =>
+  unwrap(api.get<{ version: string; features: string[] }>('/api/version'));
 
 // App Config API (v2)
 export interface AppConfig {
@@ -237,7 +261,7 @@ export interface AppConfigResponse {
 }
 
 export const getAppConfig = () =>
-  api.get<AppConfigResponse>('/api/v2/config');
+  unwrap(api.get<AppConfigResponse>('/api/v2/config'));
 
 // Registration & Auth API (v2)
 export interface RegisterRequest {
@@ -253,19 +277,19 @@ export interface AuthResponse {
 }
 
 export const register = (data: RegisterRequest) =>
-  api.post<AuthResponse>('/api/v2/auth/register', data);
+  unwrap(api.post<AuthResponse>('/api/v2/auth/register', data));
 
 export const verifyEmail = (token: string) =>
-  api.post<AuthResponse>('/api/v2/auth/verify-email', { token });
+  unwrap(api.post<AuthResponse>('/api/v2/auth/verify-email', { token }));
 
 export const resendVerification = (email: string) =>
-  api.post<AuthResponse>('/api/v2/auth/resend-verification', { email });
+  unwrap(api.post<AuthResponse>('/api/v2/auth/resend-verification', { email }));
 
 export const forgotPassword = (email: string) =>
-  api.post<AuthResponse>('/api/v2/auth/forgot-password', { email });
+  unwrap(api.post<AuthResponse>('/api/v2/auth/forgot-password', { email }));
 
 export const resetPassword = (token: string, password: string) =>
-  api.post<AuthResponse>('/api/v2/auth/reset-password', { token, password });
+  unwrap(api.post<AuthResponse>('/api/v2/auth/reset-password', { token, password }));
 
 // Billing API (v2)
 export interface BillingConfig {
@@ -324,18 +348,18 @@ export interface CheckoutResponse {
 }
 
 export const getBillingConfig = () =>
-  api.get<BillingConfig>('/api/v2/billing/config');
+  unwrap(api.get<BillingConfig>('/api/v2/billing/config'));
 
 export const getSubscriptionStatus = () =>
-  api.get<{ success: boolean; data: SubscriptionStatus }>('/api/v2/billing/status');
+  unwrap(api.get<{ success: boolean; data: SubscriptionStatus }>('/api/v2/billing/status'));
 
 export const getBillingUsage = () =>
-  api.get<{ success: boolean; data: BillingUsage }>('/api/v2/billing/usage');
+  unwrap(api.get<{ success: boolean; data: BillingUsage }>('/api/v2/billing/usage'));
 
 export const createCheckoutSession = (tier: string = 'basic', interval: string = 'monthly') =>
-  api.post<CheckoutResponse>('/api/v2/billing/create-checkout', { tier, interval });
+  unwrap(api.post<CheckoutResponse>('/api/v2/billing/create-checkout', { tier, interval }));
 
 export const createPortalSession = () =>
-  api.post<CheckoutResponse>('/api/v2/billing/portal');
+  unwrap(api.post<CheckoutResponse>('/api/v2/billing/portal'));
 
 export default api;

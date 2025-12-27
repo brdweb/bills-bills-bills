@@ -37,10 +37,10 @@ export function ForgotPassword() {
     setLoading(true);
     try {
       const response = await api.forgotPassword(email);
-      if (response.data.success) {
+      if (response.success) {
         setSuccess(true);
       } else {
-        setError(response.data.error || 'Failed to send reset email');
+        setError(response.error || 'Failed to send reset email');
       }
     } catch {
       // Always show success to prevent email enumeration

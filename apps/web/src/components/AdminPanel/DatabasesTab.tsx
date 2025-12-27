@@ -40,7 +40,7 @@ export function DatabasesTab() {
     setLoading(true);
     try {
       const response = await getDatabases();
-      setDatabases(response.data);
+      setDatabases(response);
     } catch (error) {
       console.error('Failed to fetch databases:', error);
     } finally {
@@ -76,7 +76,7 @@ export function DatabasesTab() {
     // Check for users with access
     try {
       const accessRes = await getDatabaseAccess(db.id!);
-      const usersWithAccess = accessRes.data;
+      const usersWithAccess = accessRes;
 
       let message = `Are you sure you want to delete "${db.display_name}"?\n\nThis will permanently delete all bills and payments in this group.`;
 

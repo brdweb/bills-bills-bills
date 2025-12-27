@@ -29,12 +29,12 @@ export function VerifyEmail() {
     const verify = async () => {
       try {
         const response = await api.verifyEmail(token);
-        if (response.data.success) {
+        if (response.success) {
           setStatus('success');
-          setMessage(response.data.message || 'Your email has been verified!');
+          setMessage(response.message || 'Your email has been verified!');
         } else {
           setStatus('error');
-          setMessage(response.data.error || 'Verification failed');
+          setMessage(response.error || 'Verification failed');
         }
       } catch (err: unknown) {
         const error = err as { response?: { data?: { error?: string } } };

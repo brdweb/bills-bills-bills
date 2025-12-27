@@ -75,10 +75,10 @@ export function ResetPassword() {
     setLoading(true);
     try {
       const response = await api.resetPassword(token, password);
-      if (response.data.success) {
+      if (response.success) {
         setSuccess(true);
       } else {
-        setError(response.data.error || 'Password reset failed');
+        setError(response.error || 'Password reset failed');
       }
     } catch (err: unknown) {
       const error = err as { response?: { data?: { error?: string } } };

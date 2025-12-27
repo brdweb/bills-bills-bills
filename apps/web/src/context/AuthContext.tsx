@@ -52,10 +52,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setState({
         isLoggedIn: true,
         // Use is_account_owner from API (true for account owners who can access admin/billing)
-        isAdmin: response.data.is_account_owner ?? response.data.role === 'admin',
-        role: response.data.role,
-        databases: response.data.databases,
-        currentDb: response.data.current_db,
+        isAdmin: response.is_account_owner ?? response.role === 'admin',
+        role: response.role,
+        databases: response.databases,
+        currentDb: response.current_db,
         isLoading: false,
         pendingPasswordChange: null,
       });
@@ -80,12 +80,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       const response = await api.login(username, password);
 
-      if (response.data.password_change_required) {
+      if (response.password_change_required) {
         setState((prev) => ({
           ...prev,
           pendingPasswordChange: {
-            userId: response.data.user_id!,
-            changeToken: response.data.change_token!,
+            userId: response.user_id!,
+            changeToken: response.change_token!,
           },
         }));
         return { success: true }; // Login succeeded but password change required
@@ -94,16 +94,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setState({
         isLoggedIn: true,
         // Use is_account_owner from API (true for account owners who can access admin/billing)
-        isAdmin: (response.data as any).is_account_owner ?? response.data.role === 'admin',
-        role: response.data.role,
-        databases: response.data.databases || [],
-        currentDb: response.data.databases?.[0]?.name || null,
+        isAdmin: (response as any).is_account_owner ?? response.role === 'admin',
+        role: response.role,
+        databases: response.databases || [],
+        currentDb: response.databases?.[0]?.name || null,
         isLoading: false,
         pendingPasswordChange: null,
       });
 
       // Return warning if user has no database access
-      const warning = (response.data as any).warning;
+      const warning = (response as any).warning;
       return { success: true, warning };
     } catch {
       return { success: false };

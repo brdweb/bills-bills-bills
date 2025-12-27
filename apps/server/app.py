@@ -29,6 +29,10 @@ from config import (
     DEPLOYMENT_MODE, ENABLE_REGISTRATION, REQUIRE_EMAIL_VERIFICATION,
     ENABLE_BILLING, is_saas, is_self_hosted, get_public_config
 )
+from validation import (
+    validate_email, validate_username, validate_password, validate_amount,
+    validate_date, validate_frequency, validate_bill_name, validate_database_name
+)
 
 # --- JWT Configuration ---
 # In production, JWT_SECRET_KEY must be explicitly set
@@ -512,9 +516,18 @@ def databases_handler():
             dbs = Database.query.order_by(Database.created_at.desc()).all()
         return jsonify([{'id': d.id, 'name': d.name, 'display_name': d.display_name, 'description': d.description} for d in dbs])
     else:
-        data = request.get_json(); name, display_name = data.get('name'), data.get('display_name')
-        if not name or not display_name: return jsonify({'error': 'Missing fields'}), 400
-        if Database.query.filter_by(name=name).first(): return jsonify({'error': 'Exists'}), 400
+        data = request.get_json()
+        name = data.get('name', '').strip()
+        display_name = data.get('display_name', '').strip()
+
+        # Validate database name
+        is_valid, error = validate_database_name(name)
+        if not is_valid:
+            return jsonify({'error': error}), 400
+
+        # Check if name already exists
+        if Database.query.filter_by(name=name).first():
+            return jsonify({'error': 'A database with this name already exists'}), 400
         new_db = Database(name=name, display_name=display_name, description=data.get('description', ''))
         # In SaaS mode, set owner to current admin
         if is_saas():
@@ -584,8 +597,24 @@ def users_handler():
             users = User.query.all()
         return jsonify([{'id': u.id, 'username': u.username, 'role': u.role, 'email': u.email} for u in users])
     else:
-        data = request.get_json(); username, password = data.get('username'), data.get('password')
-        if User.query.filter_by(username=username).first(): return jsonify({'error': 'Taken'}), 400
+        data = request.get_json()
+        username = data.get('username', '').strip().lower()
+        password = data.get('password', '')
+
+        # Validate username
+        is_valid, error = validate_username(username)
+        if not is_valid:
+            return jsonify({'error': error}), 400
+
+        # Validate password
+        is_valid, error = validate_password(password)
+        if not is_valid:
+            return jsonify({'error': error}), 400
+
+        # Check if username already taken
+        if User.query.filter_by(username=username).first():
+            return jsonify({'error': 'Username already taken'}), 400
+
         new_user = User(username=username, role=data.get('role', 'user'), password_change_required=True)
         # In SaaS mode, track who created this user
         if is_saas():
@@ -648,13 +677,10 @@ def invite_user():
     role = data.get('role', 'user')
     database_ids = data.get('database_ids', [])
 
-    if not email:
-        return jsonify({'error': 'Email is required'}), 400
-
-    # Validate email format
-    import re
-    if not re.match(r'^[^\s@]+@[^\s@]+\.[^\s@]+$', email):
-        return jsonify({'error': 'Invalid email format'}), 400
+    # Validate email
+    is_valid, error = validate_email(email)
+    if not is_valid:
+        return jsonify({'error': error}), 400
 
     # Check if user with this email already exists
     existing_user = User.query.filter_by(email=email).first()
@@ -859,7 +885,30 @@ def bills_handler():
                     'limit_info': info
                 }), 403
 
-        data = request.get_json(); new_bill = Bill(
+        data = request.get_json()
+
+        # Validate bill name
+        is_valid, error = validate_bill_name(data.get('name', ''))
+        if not is_valid:
+            return jsonify({'error': error}), 400
+
+        # Validate amount if not variable
+        if not data.get('varies', False):
+            is_valid, error = validate_amount(data.get('amount'))
+            if not is_valid:
+                return jsonify({'error': error}), 400
+
+        # Validate frequency
+        is_valid, error = validate_frequency(data.get('frequency', 'monthly'))
+        if not is_valid:
+            return jsonify({'error': error}), 400
+
+        # Validate next due date
+        is_valid, error = validate_date(data.get('next_due', ''), 'Next due date')
+        if not is_valid:
+            return jsonify({'error': error}), 400
+
+        new_bill = Bill(
             database_id=target_db.id, name=data['name'], amount=data.get('amount'),
             is_variable=data.get('varies', False), frequency=data.get('frequency', 'monthly'),
             frequency_type=data.get('frequency_type', 'simple'), frequency_config=data.get('frequency_config', '{}'),
@@ -1146,20 +1195,21 @@ def register():
 
     # Validation
     errors = []
-    if not username or len(username) < 3:
-        errors.append('Username must be at least 3 characters')
-    if not email or '@' not in email:
-        errors.append('Valid email is required')
-    if not password or len(password) < 8:
-        errors.append('Password must be at least 8 characters')
 
-    # Password strength check
-    if password:
-        has_upper = any(c.isupper() for c in password)
-        has_lower = any(c.islower() for c in password)
-        has_digit = any(c.isdigit() for c in password)
-        if not (has_upper and has_lower and has_digit):
-            errors.append('Password must contain uppercase, lowercase, and a number')
+    # Validate username
+    is_valid, error = validate_username(username)
+    if not is_valid:
+        errors.append(error)
+
+    # Validate email
+    is_valid, error = validate_email(email)
+    if not is_valid:
+        errors.append(error)
+
+    # Validate password
+    is_valid, error = validate_password(password)
+    if not is_valid:
+        errors.append(error)
 
     if errors:
         return jsonify({'success': False, 'error': errors[0], 'errors': errors}), 400
@@ -1807,8 +1857,26 @@ def jwt_create_bill():
     if not data:
         return jsonify({'success': False, 'error': 'Invalid JSON body'}), 400
 
-    if not data.get('name') or not data.get('next_due'):
-        return jsonify({'success': False, 'error': 'Name and next_due are required'}), 400
+    # Validate bill name
+    is_valid, error = validate_bill_name(data.get('name', ''))
+    if not is_valid:
+        return jsonify({'success': False, 'error': error}), 400
+
+    # Validate amount if not variable
+    if not data.get('varies', False):
+        is_valid, error = validate_amount(data.get('amount'))
+        if not is_valid:
+            return jsonify({'success': False, 'error': error}), 400
+
+    # Validate frequency
+    is_valid, error = validate_frequency(data.get('frequency', 'monthly'))
+    if not is_valid:
+        return jsonify({'success': False, 'error': error}), 400
+
+    # Validate next due date
+    is_valid, error = validate_date(data.get('next_due', ''), 'Next due date')
+    if not is_valid:
+        return jsonify({'success': False, 'error': error}), 400
 
     new_bill = Bill(
         database_id=target_db.id, name=data['name'], amount=data.get('amount'),
@@ -2182,18 +2250,28 @@ def jwt_get_users():
 def jwt_create_user():
     """Create a new user directly (admin only, primarily for self-hosted mode)."""
     data = request.get_json()
-    username = data.get('username', '').strip()
+    username = data.get('username', '').strip().lower()
     password = data.get('password', '')
     email = data.get('email', '').strip().lower() if data.get('email') else None
     role = data.get('role', 'user')
     database_ids = data.get('database_ids', [])
 
-    if not username:
-        return jsonify({'success': False, 'error': 'Username is required'}), 400
-    if not password:
-        return jsonify({'success': False, 'error': 'Password is required'}), 400
-    if len(password) < 8:
-        return jsonify({'success': False, 'error': 'Password must be at least 8 characters'}), 400
+    # Validate username
+    is_valid, error = validate_username(username)
+    if not is_valid:
+        return jsonify({'success': False, 'error': error}), 400
+
+    # Validate password
+    is_valid, error = validate_password(password)
+    if not is_valid:
+        return jsonify({'success': False, 'error': error}), 400
+
+    # Validate email if provided
+    if email:
+        is_valid, error = validate_email(email)
+        if not is_valid:
+            return jsonify({'success': False, 'error': error}), 400
+
     if role not in ['admin', 'user']:
         return jsonify({'success': False, 'error': 'Invalid role'}), 400
 
@@ -2441,9 +2519,12 @@ def jwt_create_database():
     name = data.get('name', '').strip().lower().replace(' ', '_')
     display_name = data.get('display_name', '').strip()
 
-    if not name or not display_name:
-        return jsonify({'success': False, 'error': 'Name and display_name are required'}), 400
+    # Validate database name
+    is_valid, error = validate_database_name(name)
+    if not is_valid:
+        return jsonify({'success': False, 'error': error}), 400
 
+    # Check if name already exists
     if Database.query.filter_by(name=name).first():
         return jsonify({'success': False, 'error': 'A database with this name already exists'}), 400
 
@@ -3230,7 +3311,30 @@ def create_app():
         db_url = db_url.replace('postgresql://', 'postgresql+psycopg://', 1)
     app.config['SQLALCHEMY_DATABASE_URI'] = db_url
     app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-    CORS(app, supports_credentials=True); db.init_app(app); Migrate(app, db)
+
+    # CORS Configuration with sensible defaults
+    # Priority: ALLOWED_ORIGINS env var > APP_URL > localhost (development)
+    allowed_origins_env = os.environ.get('ALLOWED_ORIGINS', '')
+    app_url = os.environ.get('APP_URL', '')
+
+    if allowed_origins_env:
+        # Use explicit ALLOWED_ORIGINS if set (comma-separated list)
+        allowed_origins = [origin.strip() for origin in allowed_origins_env.split(',') if origin.strip()]
+    elif app_url:
+        # Use APP_URL for single-origin setup (typical for production)
+        allowed_origins = [app_url]
+    else:
+        # Default to localhost for development
+        allowed_origins = [
+            'http://localhost:5173',  # Vite dev server
+            'http://localhost:5001',  # Flask dev server
+            'http://127.0.0.1:5173',
+            'http://127.0.0.1:5001',
+        ]
+
+    logger.info(f"CORS allowed origins: {allowed_origins}")
+    CORS(app, origins=allowed_origins, supports_credentials=True)
+    db.init_app(app); Migrate(app, db)
 
     # Initialize rate limiter
     limiter.init_app(app)
