@@ -119,7 +119,7 @@ export function BillModal({ opened, onClose, onSave, onArchive, onUnarchive, onD
     if (opened) {
       api.getAccounts()
         .then(response => {
-          setAccounts(response.data);
+          setAccounts(response);
         })
         .catch(() => {
           setAccounts([]); // Fallback to empty list instead of crashing

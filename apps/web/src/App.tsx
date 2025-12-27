@@ -167,7 +167,7 @@ function App() {
       await api.processAutoPayments();
       // Then fetch bills (include archived so they can be searched)
       const response = await api.getBills(true);
-      setBills(response.data);
+      setBills(response);
     } catch (error) {
       console.error('Failed to fetch bills:', error);
       setBills([]);

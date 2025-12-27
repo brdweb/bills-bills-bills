@@ -30,7 +30,7 @@ export function PaymentHistoryChart({ billName }: PaymentHistoryChartProps) {
     setLoading(true);
     try {
       const response = await getBillMonthlyPayments(billName);
-      const monthlyData: MonthlyBillPayment[] = response.data;
+      const monthlyData: MonthlyBillPayment[] = response;
 
       // Transform and reverse to show chronological order (oldest first)
       const chartData: ChartData[] = monthlyData

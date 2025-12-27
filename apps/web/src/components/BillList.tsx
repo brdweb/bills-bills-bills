@@ -119,7 +119,7 @@ export function BillList({
   useEffect(() => {
     if (isLoggedIn) {
       getAccounts()
-        .then((res) => setAccounts(res.data))
+        .then((res) => setAccounts(res))
         .catch((err) => console.error('Failed to fetch accounts:', err));
     }
   }, [isLoggedIn, bills]); // Refetch when bills change

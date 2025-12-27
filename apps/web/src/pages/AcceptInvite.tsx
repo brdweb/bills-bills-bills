@@ -70,8 +70,8 @@ export function AcceptInvite() {
     const fetchInviteInfo = async () => {
       try {
         const response = await getInviteInfo(token);
-        setInviteEmail(response.data.email);
-        setInvitedBy(response.data.invited_by);
+        setInviteEmail(response.email);
+        setInvitedBy(response.invited_by);
       } catch (err: unknown) {
         const error = err as { response?: { data?: { error?: string } } };
         setInviteError(error.response?.data?.error || 'This invitation is invalid or has expired.');
@@ -115,7 +115,7 @@ export function AcceptInvite() {
     setLoading(true);
     try {
       const response = await acceptInvite(token, username, password);
-      setCreatedUsername(response.data.username);
+      setCreatedUsername(response.username);
       setSuccess(true);
     } catch (err: unknown) {
       const error = err as { response?: { data?: { error?: string } } };

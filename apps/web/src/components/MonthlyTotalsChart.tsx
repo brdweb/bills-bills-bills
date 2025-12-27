@@ -31,7 +31,7 @@ export function MonthlyTotalsChart({ opened, onClose }: MonthlyTotalsChartProps)
     setLoading(true);
     try {
       const response = await getMonthlyPayments();
-      const monthlyData = response.data;
+      const monthlyData = response;
 
       // Generate last 12 months of data
       const months: ChartData[] = [];

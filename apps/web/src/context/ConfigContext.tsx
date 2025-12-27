@@ -49,14 +49,8 @@ export function ConfigProvider({ children }: { children: ReactNode }) {
   const fetchConfig = async () => {
     try {
       const response = await api.getAppConfig();
-      if (response.success) {
-        setConfig(response.data);
-        setError(null);
-      } else {
-        // Fall back to default if API fails
-        setConfig(defaultConfig);
-        setError(response.error || 'Failed to load config');
-      }
+      setConfig(response);
+      setError(null);
     } catch (err) {
       console.error('Failed to fetch app config:', err);
       // Fall back to default config on error

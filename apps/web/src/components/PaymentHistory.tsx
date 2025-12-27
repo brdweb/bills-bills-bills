@@ -50,7 +50,7 @@ export function PaymentHistory({
     setLoading(true);
     try {
       const response = await getPayments(billId);
-      setPayments(response.data);
+      setPayments(response);
     } catch (error) {
       console.error('Failed to fetch payments:', error);
     } finally {

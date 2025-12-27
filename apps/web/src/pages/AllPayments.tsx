@@ -61,7 +61,7 @@ export function AllPayments() {
     setLoading(true);
     try {
       const response = await getAllPayments();
-      setPayments(response.data);
+      setPayments(response);
     } catch (error) {
       console.error('Failed to fetch payments:', error);
     } finally {

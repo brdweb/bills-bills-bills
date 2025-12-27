@@ -26,7 +26,7 @@ export function Sidebar({ bills, isLoggedIn, filter, onFilterChange, onShowChart
     if (isLoggedIn) {
       setPaymentsLoading(true);
       getMonthlyPayments()
-        .then((res) => setMonthlyPayments(res.data))
+        .then((res) => setMonthlyPayments(res))
         .catch((err) => console.error('Failed to fetch monthly payments:', err))
         .finally(() => setPaymentsLoading(false));
     }
